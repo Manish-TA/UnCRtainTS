@@ -1,7 +1,7 @@
 torch~=2.0.0
 torchnet~=0.0.4
 torch_scatter
-numpy~=1.18.5
+numpy
 pandas~=1.0.4
 geopandas~=0.8.1
 tqdm~=4.64.0
