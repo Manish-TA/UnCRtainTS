@@ -2,7 +2,7 @@ torch~=2.0.0
 torchnet~=0.0.4
 torch_scatter
 numpy
-pandas~=1.0.4
+pandas
 geopandas~=0.8.1
 tqdm~=4.64.0
 matplotlib~=3.5.2
