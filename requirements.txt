@@ -1,14 +1,31 @@
-torch~=2.0.0
-torchnet~=0.0.4
+# torch~=2.0.0
+# torchnet~=0.0.4
+# torch_scatter
+# numpy
+# pandas
+# geopandas
+# tqdm~=4.64.0
+# matplotlib
+# rasterio
+# torchgeometry~=0.1.2
+# s2cloudless~=1.6.0
+# natsort
+# fvcore
+# tensorboard
+# protobuf
+# torchvision
+
+torch>=2.0.0,<2.1.0
+torchnet
 torch_scatter
 numpy
 pandas
 geopandas
-tqdm~=4.64.0
+tqdm
 matplotlib
 rasterio
-torchgeometry~=0.1.2
-s2cloudless~=1.6.0
+torchgeometry
+s2cloudless
 natsort
 fvcore
 tensorboard
