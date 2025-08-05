@@ -156,7 +156,8 @@ def prepare_data_mono(batch, device, config):
         x = torch.cat((batch['input']['S1'].to(device).unsqueeze(1), x), dim=2)
     m = batch['input']['masks'].to(device).unsqueeze(1)
     y = batch['target']['S2'].to(device).unsqueeze(1)
-    return x, y, m
+    s1_paths = batch['input']['S1 path']
+    return x, y, m, s1_paths
 
 def prepare_data_multi(batch, device, config):
     in_S2       = recursive_todevice(batch['input']['S2'], device)
@@ -276,198 +277,32 @@ def continuous_matshow(data, min=0, max=1):
     # cax = plt.colorbar(mat, ticks=np.arange(min, max + 1))
     return fig
 
-# def iterate(model, data_loader, config, writer, mode="train", epoch=None, device=None):
-#     if len(data_loader) == 0: raise ValueError("Received data loader with zero samples!")
-#     # loss meter, needs 1 meter per scalar (see https://tnt.readthedocs.io/en/latest/_modules/torchnet/meter/averagevaluemeter.html);
-#     loss_meter = tnt.meter.AverageValueMeter()
-#     img_meter  = avg_img_metrics()
-
-#     # collect sample-averaged uncertainties and errors
-#     errs, errs_se, errs_ae,  vars_aleatoric= [], [], [], []
-
-#     t_start = time.time()
-#     for i, batch in enumerate(tqdm(data_loader)):
-#         step = (epoch-1)*len(data_loader)+i
-
-#         if config.sample_type == 'cloudy_cloudfree':
-#             x, y, in_m, dates = prepare_data(batch, device, config)
-#         elif config.sample_type == 'pretrain':
-#             x, y, in_m = prepare_data(batch, device, config)
-#             dates = None
-#         else:
-#             raise NotImplementedError
-#         inputs = {'A': x, 'B': y, 'dates': dates, 'masks': in_m}
-
-
-#         if mode != "train": # val or test
-#             with torch.no_grad():
-#                 # compute single-model mean and variance predictions
-#                 model.set_input(inputs)
-#                 model.forward()
-#                 model.get_loss_G()
-#                 model.rescale()
-#                 out = model.fake_B
-#                 if hasattr(model.netG, 'variance') and model.netG.variance is not None:
-#                     var = model.netG.variance
-#                     model.netG.variance = None
-#                 else:
-#                     var = out[:, :, S2_BANDS:, ...]
-#                 out = out[:, :, :S2_BANDS, ...]
-#                 batch_size = y.size()[0]
-
-#                 for bdx in range(batch_size):
-#                     # only compute statistics on variance estimates if using e.g. NLL loss or combinations thereof
-                    
-#                     if config.loss in ['GNLL', 'MGNLL']:
-                        
-#                         # if the variance variable is of shape [B x 1 x C x C x H x W] then it's a covariance tensor
-#                         if len(var.shape) > 5: 
-#                             covar = var
-#                             # get [B x 1 x C x H x W] variance tensor
-#                             var   = var.diagonal(dim1=2, dim2=3).moveaxis(-1,2)
-
-#                         extended_metrics = img_metrics(y[bdx], out[bdx], var=var[bdx])
-#                         vars_aleatoric.append(extended_metrics['mean var']) 
-#                         errs.append(extended_metrics['error'])
-#                         errs_se.append(extended_metrics['mean se'])
-#                         errs_ae.append(extended_metrics['mean ae'])
-#                     else:
-#                         extended_metrics = img_metrics(y[bdx], out[bdx])
-                    
-#                     img_meter.add(extended_metrics)
-#                     idx = (i*batch_size+bdx) # plot and export every k-th item
-#                     if config.plot_every>0 and idx % config.plot_every == 0:
-#                         plot_dir = os.path.join(config.res_dir, config.experiment_name, 'plots', f'epoch_{epoch}', f'{mode}')
-#                         plot_img(x[bdx], 'in', plot_dir, file_id=idx)
-#                         plot_img(out[bdx], 'pred', plot_dir, file_id=idx)
-#                         plot_img(y[bdx], 'target', plot_dir, file_id=idx)
-#                         plot_img(((out[bdx]-y[bdx])**2).mean(1, keepdims=True), 'err', plot_dir, file_id=idx)
-#                         plot_img(discrete_matshow(in_m.float().mean(axis=1).cpu()[bdx], n_colors=config.input_t), 'mask', plot_dir, file_id=idx)
-#                         if var is not None: plot_img(var.mean(2, keepdims=True)[bdx], 'var', plot_dir, file_id=idx)
-#                     if config.export_every>0 and idx % config.export_every == 0:
-#                         export_dir = os.path.join(config.res_dir, config.experiment_name, 'export', f'epoch_{epoch}', f'{mode}')
-#                         export(out[bdx], 'pred', export_dir, file_id=idx)
-#                         export(y[bdx], 'target', export_dir, file_id=idx)
-#                         if var is not None: 
-#                             try: export(covar[bdx], 'covar', export_dir, file_id=idx)
-#                             except: export(var[bdx], 'var', export_dir, file_id=idx)
-#         else: # training
-            
-#             # compute single-model mean and variance predictions
-#             model.set_input(inputs)
-#             model.optimize_parameters() # not using model.forward() directly
-#             out    = model.fake_B.detach().cpu()
-
-#             # read variance predictions stored on generator
-#             if hasattr(model.netG, 'variance') and model.netG.variance is not None:
-#                 var = model.netG.variance.cpu()
-#             else:
-#                 var = out[:, :, S2_BANDS:, ...]
-#             out = out[:, :, :S2_BANDS, ...]
-
-#             if config.plot_every>0:
-#                 plot_out = out.detach().clone()
-#                 batch_size = y.size()[0]
-#                 for bdx in range(batch_size):
-#                     idx = (i*batch_size+bdx) # plot and export every k-th item
-#                     if idx % config.plot_every == 0:
-#                         plot_dir = os.path.join(config.res_dir, config.experiment_name, 'plots', f'epoch_{epoch}', f'{mode}')
-#                         plot_img(x[bdx], 'in', plot_dir, file_id=i)
-#                         plot_img(plot_out[bdx], 'pred', plot_dir, file_id=i)
-#                         plot_img(y[bdx], 'target', plot_dir, file_id=i)
-
-#         if mode == "train":
-#             # periodically log stats
-#             if step%config.display_step==0:
-#                 out, x, y, in_m = out.cpu(), x.cpu(), y.cpu(), in_m.cpu()
-#                 if config.loss in ['GNLL', 'MGNLL']:
-#                     var = var.cpu()
-#                     log_train(writer, config, model, step, x, out, y, in_m, var=var)
-#                 else:
-#                     log_train(writer, config, model, step, x, out, y, in_m)
-        
-#         # log the loss, computed via model.backward_G() at train time & via model.get_loss_G() at val/test time
-#         loss_meter.add(model.loss_G.item())
-
-#         # after each batch, close any leftover figures
-#         plt.close('all')
-
-#     # --- end of epoch ---
-#     # after each epoch, log the loss metrics
-#     t_end = time.time()
-#     total_time = t_end - t_start
-#     print("Epoch time : {:.1f}s".format(total_time))
-#     metrics = {f"{mode}_epoch_time": total_time}
-#     # log the loss, only computed within model.backward_G() at train time
-#     metrics[f"{mode}_loss"] = loss_meter.value()[0]
-
-#     if mode == "train": # after each epoch, update lr acc. to scheduler
-#         current_lr = model.optimizer_G.state_dict()['param_groups'][0]['lr']
-#         writer.add_scalar('Etc/train/lr', current_lr, step)
-#         model.scheduler_G.step()
-
-#     if mode == "test" or mode == "val":
-#         # log the metrics
-
-#         # log image metrics
-#         for key, val in img_meter.value().items(): writer.add_scalar(f'{mode}/{key}', val, step)
-
-#         # any loss is currently only computed within model.backward_G() at train time
-#         writer.add_scalar(f'{mode}/loss', metrics[f"{mode}_loss"], step)
-
-#         # use add_images for batch-wise adding across temporal dimension
-#         if config.use_sar:
-#             writer.add_image(f'Img/{mode}/in_s1', x[0,:,[0], ...], step, dataformats='NCHW')
-#             writer.add_image(f'Img/{mode}/in_s2', x[0,:,[5,4,3], ...], step, dataformats='NCHW')
-#         else:
-#             writer.add_image(f'Img/{mode}/in_s2', x[0,:,[3,2,1], ...], step, dataformats='NCHW')
-#         writer.add_image(f'Img/{mode}/out', out[0,0,[3,2,1], ...], step, dataformats='CHW')
-#         writer.add_image(f'Img/{mode}/y', y[0,0,[3,2,1], ...], step, dataformats='CHW')
-#         writer.add_image(f'Img/{mode}/m', in_m[0,:,None, ...], step, dataformats='NCHW')
-
-
-#         # compute Expected Calibration Error (ECE)
-#         if config.loss in ['GNLL', 'MGNLL']:
-#             sorted_errors_se   = compute_ece(vars_aleatoric, errs_se, len(data_loader.dataset), percent=5)
-#             sorted_errors      = {'se_sortAleatoric': sorted_errors_se}
-#             plot_discard(sorted_errors['se_sortAleatoric'], config, mode, step, is_se=True)
-
-#             # compute ECE 
-#             uce_l2, auce_l2 = compute_uce_auce(vars_aleatoric, errs, len(data_loader.dataset), percent=5, l2=True, mode=mode, step=step)
-
-#             # no need for a running mean here
-#             img_meter.value()['UCE SE']  = uce_l2.cpu().numpy().item()
-#             img_meter.value()['AUCE SE'] = auce_l2.cpu().numpy().item()
-
-#         if config.loss in ['GNLL', 'MGNLL']:
-#             log_aleatoric(writer, config, mode, step, var,  f'model/', img_meter)
-
-#         return metrics, img_meter.value()
-#     else:
-#         return metrics
-
-
-
-
 def iterate(model, data_loader, config, writer, mode="train", epoch=None, device=None):
     if len(data_loader) == 0: raise ValueError("Received data loader with zero samples!")
+    # loss meter, needs 1 meter per scalar (see https://tnt.readthedocs.io/en/latest/_modules/torchnet/meter/averagevaluemeter.html);
     loss_meter = tnt.meter.AverageValueMeter()
     img_meter  = avg_img_metrics()
+
+    # collect sample-averaged uncertainties and errors
     errs, errs_se, errs_ae,  vars_aleatoric= [], [], [], []
+
     t_start = time.time()
     for i, batch in enumerate(tqdm(data_loader)):
         step = (epoch-1)*len(data_loader)+i
+
         if config.sample_type == 'cloudy_cloudfree':
             x, y, in_m, dates = prepare_data(batch, device, config)
         elif config.sample_type == 'pretrain':
-            x, y, in_m = prepare_data(batch, device, config)
+            x, y, in_m, s1_paths = prepare_data(batch, device, config)
             dates = None
         else:
             raise NotImplementedError
         inputs = {'A': x, 'B': y, 'dates': dates, 'masks': in_m}
 
+
         if mode != "train": # val or test
             with torch.no_grad():
+                # compute single-model mean and variance predictions
                 model.set_input(inputs)
                 model.forward()
                 model.get_loss_G()
@@ -482,12 +317,18 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
                 batch_size = y.size()[0]
 
                 for bdx in range(batch_size):
+                    # only compute statistics on variance estimates if using e.g. NLL loss or combinations thereof
+                    
                     if config.loss in ['GNLL', 'MGNLL']:
-                        if len(var.shape) > 5:
+                        
+                        # if the variance variable is of shape [B x 1 x C x C x H x W] then it's a covariance tensor
+                        if len(var.shape) > 5: 
                             covar = var
+                            # get [B x 1 x C x H x W] variance tensor
                             var   = var.diagonal(dim1=2, dim2=3).moveaxis(-1,2)
+
                         extended_metrics = img_metrics(y[bdx], out[bdx], var=var[bdx])
-                        vars_aleatoric.append(extended_metrics['mean var'])
+                        vars_aleatoric.append(extended_metrics['mean var']) 
                         errs.append(extended_metrics['error'])
                         errs_se.append(extended_metrics['mean se'])
                         errs_ae.append(extended_metrics['mean ae'])
@@ -495,26 +336,15 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
                         extended_metrics = img_metrics(y[bdx], out[bdx])
                     
                     img_meter.add(extended_metrics)
-                    
-                    # --- MODIFICATION START ---
-                    # Get the absolute index of the current sample
-                    idx = (i*batch_size+bdx)
-                    
-                    try:
-                        # Access the underlying dataset to get the sample's file path list.
-                        # The .dataset accesses the Subset, the second .dataset accesses the SEN12MSCRTS object.
-                        # We assume the list of files is stored in an attribute like 'flist_clear'.
-                        sample_path = data_loader.dataset.dataset.flist_clear[idx]
-                        # Get the filename without the extension (e.g., ".tif")
-                        file_name_for_saving = os.path.basename(sample_path).split('.')[0]
-                    except (AttributeError, IndexError):
-                        # If we can't get the filename, fall back to the numeric index
-                        file_name_for_saving = idx
-                    # --- MODIFICATION END ---
-                        
+
+                    current_s1_path = s1_paths[bdx]
+                    base_filename = os.path.basename(current_s1_path)
+                    file_name_for_saving = base_filename.split('.')[0].replace('_s1', '')
+
+
+                    idx = (i*batch_size+bdx) # plot and export every k-th item
                     if config.plot_every>0 and idx % config.plot_every == 0:
                         plot_dir = os.path.join(config.res_dir, config.experiment_name, 'plots', f'epoch_{epoch}', f'{mode}')
-                        # Use the actual filename instead of the numeric index
                         plot_img(x[bdx], 'in', plot_dir, file_id=file_name_for_saving)
                         plot_img(out[bdx], 'pred', plot_dir, file_id=file_name_for_saving)
                         plot_img(y[bdx], 'target', plot_dir, file_id=file_name_for_saving)
@@ -523,56 +353,76 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
                         if var is not None: plot_img(var.mean(2, keepdims=True)[bdx], 'var', plot_dir, file_id=file_name_for_saving)
                     if config.export_every>0 and idx % config.export_every == 0:
                         export_dir = os.path.join(config.res_dir, config.experiment_name, 'export', f'epoch_{epoch}', f'{mode}')
-                        # Use the actual filename instead of the numeric index
                         export(out[bdx], 'pred', export_dir, file_id=file_name_for_saving)
                         export(y[bdx], 'target', export_dir, file_id=file_name_for_saving)
-                        if var is not None:
+                        if var is not None: 
                             try: export(covar[bdx], 'covar', export_dir, file_id=file_name_for_saving)
                             except: export(var[bdx], 'var', export_dir, file_id=file_name_for_saving)
-        else: # training mode
-            # (The rest of the function for training remains the same as it does not save files with file_id)
+        else: # training
+            
+            # compute single-model mean and variance predictions
             model.set_input(inputs)
             model.optimize_parameters() # not using model.forward() directly
-            out = model.fake_B.detach().cpu()
+            out    = model.fake_B.detach().cpu()
+
+            # read variance predictions stored on generator
             if hasattr(model.netG, 'variance') and model.netG.variance is not None:
                 var = model.netG.variance.cpu()
             else:
                 var = out[:, :, S2_BANDS:, ...]
             out = out[:, :, :S2_BANDS, ...]
-            if config.plot_every > 0:
+
+            if config.plot_every>0:
                 plot_out = out.detach().clone()
                 batch_size = y.size()[0]
                 for bdx in range(batch_size):
-                    idx = (i*batch_size+bdx)
+                    idx = (i*batch_size+bdx) # plot and export every k-th item
                     if idx % config.plot_every == 0:
                         plot_dir = os.path.join(config.res_dir, config.experiment_name, 'plots', f'epoch_{epoch}', f'{mode}')
                         plot_img(x[bdx], 'in', plot_dir, file_id=i)
                         plot_img(plot_out[bdx], 'pred', plot_dir, file_id=i)
                         plot_img(y[bdx], 'target', plot_dir, file_id=i)
-            if mode == "train":
-                if step % config.display_step == 0:
-                    out, x, y, in_m = out.cpu(), x.cpu(), y.cpu(), in_m.cpu()
-                    if config.loss in ['GNLL', 'MGNLL']:
-                        var = var.cpu()
-                        log_train(writer, config, model, step, x, out, y, in_m, var=var)
-                    else:
-                        log_train(writer, config, model, step, x, out, y, in_m)
-            loss_meter.add(model.loss_G.item())
-            plt.close('all')
+
+        if mode == "train":
+            # periodically log stats
+            if step%config.display_step==0:
+                out, x, y, in_m = out.cpu(), x.cpu(), y.cpu(), in_m.cpu()
+                if config.loss in ['GNLL', 'MGNLL']:
+                    var = var.cpu()
+                    log_train(writer, config, model, step, x, out, y, in_m, var=var)
+                else:
+                    log_train(writer, config, model, step, x, out, y, in_m)
+        
+        # log the loss, computed via model.backward_G() at train time & via model.get_loss_G() at val/test time
+        loss_meter.add(model.loss_G.item())
+
+        # after each batch, close any leftover figures
+        plt.close('all')
 
     # --- end of epoch ---
+    # after each epoch, log the loss metrics
     t_end = time.time()
     total_time = t_end - t_start
     print("Epoch time : {:.1f}s".format(total_time))
     metrics = {f"{mode}_epoch_time": total_time}
+    # log the loss, only computed within model.backward_G() at train time
     metrics[f"{mode}_loss"] = loss_meter.value()[0]
-    if mode == "train":
+
+    if mode == "train": # after each epoch, update lr acc. to scheduler
         current_lr = model.optimizer_G.state_dict()['param_groups'][0]['lr']
         writer.add_scalar('Etc/train/lr', current_lr, step)
         model.scheduler_G.step()
+
     if mode == "test" or mode == "val":
+        # log the metrics
+
+        # log image metrics
         for key, val in img_meter.value().items(): writer.add_scalar(f'{mode}/{key}', val, step)
+
+        # any loss is currently only computed within model.backward_G() at train time
         writer.add_scalar(f'{mode}/loss', metrics[f"{mode}_loss"], step)
+
+        # use add_images for batch-wise adding across temporal dimension
         if config.use_sar:
             writer.add_image(f'Img/{mode}/in_s1', x[0,:,[0], ...], step, dataformats='NCHW')
             writer.add_image(f'Img/{mode}/in_s2', x[0,:,[5,4,3], ...], step, dataformats='NCHW')
@@ -581,18 +431,28 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
         writer.add_image(f'Img/{mode}/out', out[0,0,[3,2,1], ...], step, dataformats='CHW')
         writer.add_image(f'Img/{mode}/y', y[0,0,[3,2,1], ...], step, dataformats='CHW')
         writer.add_image(f'Img/{mode}/m', in_m[0,:,None, ...], step, dataformats='NCHW')
+
+
+        # compute Expected Calibration Error (ECE)
         if config.loss in ['GNLL', 'MGNLL']:
             sorted_errors_se   = compute_ece(vars_aleatoric, errs_se, len(data_loader.dataset), percent=5)
             sorted_errors      = {'se_sortAleatoric': sorted_errors_se}
             plot_discard(sorted_errors['se_sortAleatoric'], config, mode, step, is_se=True)
+
+            # compute ECE 
             uce_l2, auce_l2 = compute_uce_auce(vars_aleatoric, errs, len(data_loader.dataset), percent=5, l2=True, mode=mode, step=step)
+
+            # no need for a running mean here
             img_meter.value()['UCE SE']  = uce_l2.cpu().numpy().item()
             img_meter.value()['AUCE SE'] = auce_l2.cpu().numpy().item()
+
         if config.loss in ['GNLL', 'MGNLL']:
             log_aleatoric(writer, config, mode, step, var,  f'model/', img_meter)
+
         return metrics, img_meter.value()
     else:
         return metrics
+
 
 def plot_discard(sorted_errors, config, mode, step, is_se=True):
     metric = 'SE' if is_se else 'AE'
