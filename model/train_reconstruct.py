@@ -148,44 +148,53 @@ def plot_img(imgs, mod, plot_dir, file_id=None):
             time = '' if imgs.shape[0] == 1 else f'_t-{tdx}'
             
             # --- MODIFICATION START ---
-            # Process based on the mod to get the image data ready
             if mod in ["pred", "in", "target", "s2"]:
-                # Select RGB bands and move channel axis to the end for processing
+                # --- RGB Image Processing ---
                 rgb_bands = [3, 2, 1] if img.shape[0] == S2_BANDS else [5, 4, 3]
-                img_to_save = img[rgb_bands, ...].transpose(1, 2, 0)
+                rgb_image = img[rgb_bands, ...].transpose(1, 2, 0)
                 
-                # Dynamically calculate vmin and vmax using percentiles for robust contrast
-                v_min, v_max = np.percentile(img_to_save, (2, 98), axis=(0, 1))
-                cmap = None # imsave uses RGB by default for 3-channel arrays
+                # Perform robust contrast stretching
+                p_low, p_high = 2, 98
+                v_min, v_max = np.percentile(rgb_image, (p_low, p_high), axis=(0, 1))
+                rgb_clipped = np.clip(rgb_image, v_min, v_max)
                 
-            else: # For single-channel data like masks, errors, etc.
-                img_to_save = img[0, ...] # Select the single channel
+                # Scale to 0-1 range
+                if np.all(v_max > v_min):
+                    img_to_save = (rgb_clipped - v_min) / (v_max - v_min)
+                else:
+                    img_to_save = np.zeros_like(rgb_clipped)
                 
-                # Dynamically calculate vmin and vmax for grayscale images
-                v_min, v_max = np.percentile(img_to_save, (2, 98))
-                cmap = 'gray'
+                cmap_to_use = None # Use None for RGB
 
+            else:
+                # --- Grayscale Image Processing ---
+                gray_image = img[0, ...] # Select the single channel
+                
+                # Perform robust contrast stretching
+                p_low, p_gigh = 2, 98
+                v_min, v_max = np.percentile(gray_image, (p_low, p_gigh))
+                
+                # Scale to 0-1 range
+                if v_max > v_min:
+                    img_to_save = (np.clip(gray_image, v_min, v_max) - v_min) / (v_max - v_min)
+                else:
+                    img_to_save = np.zeros_like(gray_image)
+                
+                cmap_to_use = 'gray'
             # --- MODIFICATION END ---
             
             if file_id is not None:
-                # Note: The clipping is now handled by vmin/vmax in imsave
-                # We pass the calculated v_min and v_max directly to plt.imsave
                 plt.imsave(
                     os.path.join(plot_dir, f'img-{file_id}_{mod}{time}.png'),
                     img_to_save.squeeze(),
                     dpi=100,
-                    cmap=cmap,
-                    vmin=v_min,
-                    vmax=v_max
+                    cmap=cmap_to_use
                 )
     except Exception as e:
         if isinstance(imgs, plt.Figure):
             plt.savefig(os.path.join(plot_dir, f'img-{file_id}_{mod}.png'), dpi=100)
         else:
             print(f"An error occurred in plot_img for file_id {file_id}, mod {mod}: {e}")
-            # This 'raise' was removed from the original to prevent crashes on single image errors
-            # raise NotImplementedError
-
 
 def export(arrs, mod, export_dir, file_id=None):
     if not os.path.exists(export_dir): os.makedirs(export_dir)
