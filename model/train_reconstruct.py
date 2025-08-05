@@ -113,31 +113,78 @@ if __name__ == "__main__": pprint.pprint(config)
 # instantiate tensorboard logger
 writer = SummaryWriter(os.path.join(os.path.dirname(config.res_dir), "logs", config.experiment_name))
 
+# def plot_img(imgs, mod, plot_dir, file_id=None):
+#     if not os.path.exists(plot_dir): os.makedirs(plot_dir)
+#     try:
+#         imgs = imgs.cpu().numpy()
+#         for tdx, img in enumerate(imgs): # iterate over temporal dimension
+#             time = '' if imgs.shape[0] == 1 else f'_t-{tdx}'
+#             if mod in ["pred", "in", "target", "s2"]:
+#                 rgb = [3,2,1] if img.shape[0]==S2_BANDS else [5,4,3]
+#                 img, val_min, val_max = img[rgb, ...], 0, 1
+#             elif mod == "s1":
+#                 img, val_min, val_max = img[[0], ...], 0, 1
+#             elif mod == "mask":
+#                 img, val_min, val_max = img[[0], ...], 0, 1
+#             elif mod == "err":
+#                 img, val_min, val_max = img[[0], ...], 0, 0.01
+#             elif mod == "var":
+#                 img, val_min, val_max = img[[0], ...], 0, 0.000025
+#             else: raise NotImplementedError
+#             if file_id is not None: # export into file name
+#                 img = img.clip(val_min, val_max) # note: this only removes outliers, vmin/vmax below do the global rescaling (else doing instance-wise min/max scaling)
+#                 plt.imsave(os.path.join(plot_dir, f'img-{file_id}_{mod}{time}.png'), np.moveaxis(img,0,-1).squeeze(), dpi=100, cmap='gray', vmin=val_min, vmax=val_max)
+#     except: 
+#         if isinstance(imgs, plt.Figure): # the passed argument is a pre-rendered figure
+#             plt.savefig(os.path.join(plot_dir, f'img-{file_id}_{mod}.png'), dpi=100)
+#         else: raise NotImplementedError
+
+
 def plot_img(imgs, mod, plot_dir, file_id=None):
     if not os.path.exists(plot_dir): os.makedirs(plot_dir)
     try:
         imgs = imgs.cpu().numpy()
         for tdx, img in enumerate(imgs): # iterate over temporal dimension
             time = '' if imgs.shape[0] == 1 else f'_t-{tdx}'
+            
+            # --- MODIFICATION START ---
+            # Process based on the mod to get the image data ready
             if mod in ["pred", "in", "target", "s2"]:
-                rgb = [3,2,1] if img.shape[0]==S2_BANDS else [5,4,3]
-                img, val_min, val_max = img[rgb, ...], 0, 1
-            elif mod == "s1":
-                img, val_min, val_max = img[[0], ...], 0, 1
-            elif mod == "mask":
-                img, val_min, val_max = img[[0], ...], 0, 1
-            elif mod == "err":
-                img, val_min, val_max = img[[0], ...], 0, 0.01
-            elif mod == "var":
-                img, val_min, val_max = img[[0], ...], 0, 0.000025
-            else: raise NotImplementedError
-            if file_id is not None: # export into file name
-                img = img.clip(val_min, val_max) # note: this only removes outliers, vmin/vmax below do the global rescaling (else doing instance-wise min/max scaling)
-                plt.imsave(os.path.join(plot_dir, f'img-{file_id}_{mod}{time}.png'), np.moveaxis(img,0,-1).squeeze(), dpi=100, cmap='gray', vmin=val_min, vmax=val_max)
-    except: 
-        if isinstance(imgs, plt.Figure): # the passed argument is a pre-rendered figure
+                # Select RGB bands and move channel axis to the end for processing
+                rgb_bands = [3, 2, 1] if img.shape[0] == S2_BANDS else [5, 4, 3]
+                img_to_save = img[rgb_bands, ...].transpose(1, 2, 0)
+                
+                # Dynamically calculate vmin and vmax using percentiles for robust contrast
+                v_min, v_max = np.percentile(img_to_save, (2, 98), axis=(0, 1))
+                cmap = None # imsave uses RGB by default for 3-channel arrays
+                
+            else: # For single-channel data like masks, errors, etc.
+                img_to_save = img[0, ...] # Select the single channel
+                
+                # Dynamically calculate vmin and vmax for grayscale images
+                v_min, v_max = np.percentile(img_to_save, (2, 98))
+                cmap = 'gray'
+
+            # --- MODIFICATION END ---
+            
+            if file_id is not None:
+                # Note: The clipping is now handled by vmin/vmax in imsave
+                # We pass the calculated v_min and v_max directly to plt.imsave
+                plt.imsave(
+                    os.path.join(plot_dir, f'img-{file_id}_{mod}{time}.png'),
+                    img_to_save.squeeze(),
+                    dpi=100,
+                    cmap=cmap,
+                    vmin=v_min,
+                    vmax=v_max
+                )
+    except Exception as e:
+        if isinstance(imgs, plt.Figure):
             plt.savefig(os.path.join(plot_dir, f'img-{file_id}_{mod}.png'), dpi=100)
-        else: raise NotImplementedError
+        else:
+            print(f"An error occurred in plot_img for file_id {file_id}, mod {mod}: {e}")
+            # This 'raise' was removed from the original to prevent crashes on single image errors
+            # raise NotImplementedError
 
 
 def export(arrs, mod, export_dir, file_id=None):
