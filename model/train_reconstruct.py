@@ -409,6 +409,7 @@ def iterate(model, data_loader, config, writer, mode="train", epoch=None, device
                         if var is not None: plot_img(var.mean(2, keepdims=True)[bdx], 'var', plot_dir, file_id=file_name_for_saving)
                     if config.export_every>0 and idx % config.export_every == 0:
                         export_dir = os.path.join(config.res_dir, config.experiment_name, 'export', f'epoch_{epoch}', f'{mode}')
+                        export(x[bdx], 'in', export_dir, file_id=file_name_for_saving)
                         export(out[bdx], 'pred', export_dir, file_id=file_name_for_saving)
                         export(y[bdx], 'target', export_dir, file_id=file_name_for_saving)
                         if var is not None: 
