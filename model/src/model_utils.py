@@ -203,6 +203,32 @@ def load_checkpoint(config, checkp_dir, model, name):
     print(f'Loading checkpoint {chckp_path}')
     checkpoint = torch.load(chckp_path, map_location=config.device)["state_dict"]
 
+
+
+
+
+    import pprint # Import the pretty-print library
+
+    # Assume 'chckp_path' and 'config' are already defined
+    # Load the entire checkpoint object into a variable
+    checkpoint_object = torch.load(chckp_path, map_location=config.device)
+
+    # Print the entire object to see its top-level structure
+    print("--- Full Checkpoint Object Keys ---")
+    pprint.pprint(checkpoint_object.keys())
+
+    # To see just the layer names inside the 'state_dict' without the huge tensors,
+    # you can print only its keys.
+    if 'state_dict' in checkpoint_object:
+        print("\n--- Layers inside 'state_dict' ---")
+        state_dict_keys = checkpoint_object['state_dict'].keys()
+        pprint.pprint(list(state_dict_keys))
+
+
+
+
+
+
     try: # try loading checkpoint strictly, all weights & their names must match
         model.load_state_dict(checkpoint, strict=True)
     except:
