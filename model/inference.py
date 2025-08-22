@@ -69,7 +69,7 @@ def find_input_pairs(input_dir):
     s1_files = natsorted(glob.glob(os.path.join(input_dir, '**', '*_s1_*'), recursive=True))
     pairs = []
     for s1_path in s1_files:
-        s2_cloudy_path = s1_path.replace('_s1', '_s2_cloudy')
+        s2_cloudy_path = s1_path.replace('s1', 's2_cloudy')
         if os.path.exists(s2_cloudy_path):
             pairs.append((s1_path, s2_cloudy_path))
         else:
@@ -161,7 +161,7 @@ def run_batch_inference(config):
             output_array = np.clip(output_array, 0, 1) * 10000.0
             
             # Create a descriptive output filename
-            base_name = os.path.basename(s1_path).replace('_s1', '_s2_reconstructed')
+            base_name = os.path.basename(s1_path).replace('s1', 's2_reconstructed')
             output_path = os.path.join(config.res_dir, base_name)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
