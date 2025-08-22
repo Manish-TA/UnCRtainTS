@@ -86,7 +86,8 @@ class BaseModel(nn.Module):
 
     def set_input(self, input):
         self.real_A = self.scale_by * input['A'].to(self.config.device)
-        self.real_B = self.scale_by * input['B'].to(self.config.device)
+        # self.real_B = self.scale_by * input['B'].to(self.config.device)
+        self.real_B = None if input['B'] is None else self.scale_by * input['B'].to(self.config.device)
         self.dates  = None if input['dates'] is None else input['dates'].to(self.config.device)
         self.masks  = input['masks'].to(self.config.device)
 
