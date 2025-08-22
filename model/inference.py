@@ -82,12 +82,27 @@ def run_batch_inference(config):
     with open(conf_path) as file:
         model_config = json.loads(file.read())
         t_args = argparse.Namespace()
-        t_args.__dict__.update(model_config)
+
+        no_overwrite = ['pid', 'device', 'resume_at', 'trained_checkp', 'res_dir', 'weight_folder', 'root1', 'root2', 'root3', 
+        'max_samples_count', 'batch_size', 'display_step', 'plot_every', 'export_every', 'input_t', 'region', 'min_cov', 'max_cov']
+        conf_dict = {key:val for key,val in model_config.items() if key not in no_overwrite}
+        for key, val in vars(config).items(): 
+            if key in no_overwrite: conf_dict[key] = val
+
+        t_args.__dict__.update(conf_dict)
+        config = parser.parse_args(namespace=t_args)
         config = utils.str2list(t_args, ["encoder_widths", "decoder_widths", "out_conv"])
     
     model = get_model(config)
-    load_checkpoint(config, config.model_dir, model, "model")
     model = model.to(device)
+
+    config.N_params = utils.get_ntrainparams(model)
+    print(f"TOTAL TRAINABLE PARAMETERS: {config.N_params}\n")
+    print(model)
+    # load_checkpoint(config, config.model_dir, model, "model")
+    ckpt_n = f'_epoch_{config.resume_at}' if config.resume_at > 0 else ''
+    load_checkpoint(config, config.model_dir, model, f"model{ckpt_n}")
+
     model.eval()
     print("--- Model loaded successfully ---")
 
