@@ -118,9 +118,9 @@ def run_batch_inference(config):
     print("--- Cloud detector initialized ---")
 
     # --- 3. Find all data pairs to process ---
-    input_pairs = find_input_pairs(config.input_dir)
+    input_pairs = find_input_pairs(config.root3)
     if not input_pairs:
-        print(f"Error: No S1/S2_cloudy pairs found in {config.input_dir}. Please check the directory structure.")
+        print(f"Error: No S1/S2_cloudy pairs found in {config.root3}. Please check the directory structure.")
         return
     print(f"--- Found {len(input_pairs)} pairs to process ---")
     
@@ -162,7 +162,7 @@ def run_batch_inference(config):
             
             # Create a descriptive output filename
             base_name = os.path.basename(s1_path).replace('_s1.tif', '_s2_reconstructed.tif')
-            output_path = os.path.join(config.output_dir, base_name)
+            output_path = os.path.join(config.res_dir, base_name)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
             # Save the result as a georeferenced TIFF
@@ -171,7 +171,7 @@ def run_batch_inference(config):
         except Exception as e:
             print(f"\nFailed to process {os.path.basename(s1_path)}. Error: {e}")
 
-    print(f"\n--- Batch inference complete. Results saved to: {config.output_dir} ---")
+    print(f"\n--- Batch inference complete. Results saved to: {config.res_dir} ---")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Batch Inference Script for SEN12MS-CR Image Reconstruction')
