@@ -13,8 +13,8 @@ from natsort import natsorted
 dirname = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(dirname))
 
-from model.src.model_utils import get_model, load_checkpoint
-from model.src import utils
+from src.model_utils import get_model, load_checkpoint
+from src import utils
 from s2cloudless import S2PixelCloudDetector # For on-the-fly cloud masks
 
 def read_tif(path_IMG):
