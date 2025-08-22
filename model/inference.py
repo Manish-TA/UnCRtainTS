@@ -13,6 +13,12 @@ from natsort import natsorted
 dirname = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(dirname))
 
+from parse_args import create_parser
+parser = create_parser(mode='test')
+test_config = parser.parse_args()
+test_config.pid = os.getpid()
+
+
 from src.model_utils import get_model, load_checkpoint
 from src import utils
 from s2cloudless import S2PixelCloudDetector # For on-the-fly cloud masks
@@ -71,28 +77,28 @@ def find_input_pairs(input_dir):
     return pairs
 
 
+conf_path = os.path.join(test_config.model_dir, "conf.json")
+if not os.path.exists(conf_path):
+    raise FileNotFoundError(f"Configuration file not found at {conf_path}")
+
+with open(conf_path) as file:
+    model_config = json.loads(file.read())
+    t_args = argparse.Namespace()
+
+    no_overwrite = ['pid', 'device', 'resume_at', 'trained_checkp', 'res_dir', 'weight_folder', 'root1', 'root2', 'root3', 
+    'max_samples_count', 'batch_size', 'display_step', 'plot_every', 'export_every', 'input_t', 'region', 'min_cov', 'max_cov']
+    conf_dict = {key:val for key,val in model_config.items() if key not in no_overwrite}
+    for key, val in vars(test_config).items(): 
+        if key in no_overwrite: conf_dict[key] = val
+
+    t_args.__dict__.update(conf_dict)
+    config = parser.parse_args(namespace=t_args)
+    config = utils.str2list(t_args, ["encoder_widths", "decoder_widths", "out_conv"])
+
+
 def run_batch_inference(config):
     device = torch.device(config.device)
 
-    # --- 1. Load Model and Configuration ---
-    conf_path = os.path.join(config.model_dir, "conf.json")
-    if not os.path.exists(conf_path):
-        raise FileNotFoundError(f"Configuration file not found at {conf_path}")
-    
-    with open(conf_path) as file:
-        model_config = json.loads(file.read())
-        t_args = argparse.Namespace()
-
-        no_overwrite = ['pid', 'device', 'resume_at', 'trained_checkp', 'res_dir', 'weight_folder', 'root1', 'root2', 'root3', 
-        'max_samples_count', 'batch_size', 'display_step', 'plot_every', 'export_every', 'input_t', 'region', 'min_cov', 'max_cov']
-        conf_dict = {key:val for key,val in model_config.items() if key not in no_overwrite}
-        for key, val in vars(config).items(): 
-            if key in no_overwrite: conf_dict[key] = val
-
-        t_args.__dict__.update(conf_dict)
-        config = parser.parse_args(namespace=t_args)
-        config = utils.str2list(t_args, ["encoder_widths", "decoder_widths", "out_conv"])
-    
     model = get_model(config)
     model = model.to(device)
 
@@ -174,5 +180,5 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir', type=str, required=True, help='Path to the folder where reconstructed images will be saved.')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use for inference (cuda or cpu)')
     
-    args = parser.parse_args()
-    run_batch_inference(args)
+    # args = parser.parse_args()
+    run_batch_inference(config)
