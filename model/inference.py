@@ -66,7 +66,7 @@ def save_reconstructed_tif(path, array, source_tif_meta):
 
 def find_input_pairs(input_dir):
     """Finds all corresponding S1 and S2_cloudy pairs in a directory."""
-    s1_files = natsorted(glob.glob(os.path.join(input_dir, '**', '*_s1.tif'), recursive=True))
+    s1_files = natsorted(glob.glob(os.path.join(input_dir, '**', '*_s1_*'), recursive=True))
     pairs = []
     for s1_path in s1_files:
         s2_cloudy_path = s1_path.replace('_s1', '_s2_cloudy')
@@ -161,7 +161,7 @@ def run_batch_inference(config):
             output_array = np.clip(output_array, 0, 1) * 10000.0
             
             # Create a descriptive output filename
-            base_name = os.path.basename(s1_path).replace('_s1.tif', '_s2_reconstructed.tif')
+            base_name = os.path.basename(s1_path).replace('_s1', '_s2_reconstructed')
             output_path = os.path.join(config.res_dir, base_name)
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
