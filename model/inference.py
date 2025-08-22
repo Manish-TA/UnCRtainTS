@@ -77,7 +77,7 @@ def find_input_pairs(input_dir):
     return pairs
 
 
-conf_path = os.path.join(test_config.model_dir, "conf.json")
+conf_path = os.path.join(dirname, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if not os.path.exists(conf_path):
     raise FileNotFoundError(f"Configuration file not found at {conf_path}")
 
@@ -175,9 +175,9 @@ def run_batch_inference(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Batch Inference Script for SEN12MS-CR Image Reconstruction')
-    parser.add_argument('--model_dir', type=str, required=True, help='Path to the trained model experiment directory (e.g., ../results/monotemporalL2)')
-    parser.add_argument('--input_dir', type=str, required=True, help='Path to the root folder containing new, unseen data.')
-    parser.add_argument('--output_dir', type=str, required=True, help='Path to the folder where reconstructed images will be saved.')
+    parser.add_argument('--weight_folder', type=str, required=True, help='Path to the trained model experiment directory (e.g., ../results/monotemporalL2)')
+    parser.add_argument('--root3', type=str, required=True, help='Path to the root folder containing new, unseen data.')
+    parser.add_argument('--res_dir', type=str, required=True, help='Path to the folder where reconstructed images will be saved.')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use for inference (cuda or cpu)')
     
     # args = parser.parse_args()
