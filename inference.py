@@ -63,7 +63,7 @@ def find_input_pairs(input_dir):
     s1_files = natsorted(glob.glob(os.path.join(input_dir, '**', '*_s1.tif'), recursive=True))
     pairs = []
     for s1_path in s1_files:
-        s2_cloudy_path = s1_path.replace('_s1.tif', '_s2_cloudy.tif')
+        s2_cloudy_path = s1_path.replace('_s1', '_s2_cloudy')
         if os.path.exists(s2_cloudy_path):
             pairs.append((s1_path, s2_cloudy_path))
         else:
