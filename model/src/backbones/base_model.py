@@ -89,7 +89,7 @@ class BaseModel(nn.Module):
         # self.real_B = self.scale_by * input['B'].to(self.config.device)
         self.real_B = None if input['B'] is None else self.scale_by * input['B'].to(self.config.device)
         self.dates  = None if input['dates'] is None else input['dates'].to(self.config.device)
-        self.masks  = input['masks'].to(self.config.device)
+        self.masks  = None if input['masks'] is None else input['masks'].to(self.config.device)
 
 
     def reset_input(self):
@@ -104,12 +104,17 @@ class BaseModel(nn.Module):
 
 
     def rescale(self):
-        # rescale target and mean predictions
-        if hasattr(self, 'real_A'): self.real_A = 1/self.scale_by * self.real_A
-        self.real_B = 1/self.scale_by * self.real_B 
-        self.fake_B = 1/self.scale_by * self.fake_B[:,:,:S2_BANDS,...]
+        """Rescales model inputs and outputs from a normalized range back to their original scale."""
         
-        # rescale (co)variances
+        if hasattr(self, 'real_A') and self.real_A is not None:
+            self.real_A = 1/self.scale_by * self.real_A
+        
+        if hasattr(self, 'real_B') and self.real_B is not None:
+            self.real_B = 1/self.scale_by * self.real_B
+        
+        if hasattr(self, 'fake_B') and self.fake_B is not None:
+            self.fake_B = 1/self.scale_by * self.fake_B[:, :, :S2_BANDS, ...]
+            
         if hasattr(self.netG, 'variance') and self.netG.variance is not None:
             self.netG.variance = 1/self.scale_by**2 * self.netG.variance
 
