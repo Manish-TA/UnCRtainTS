@@ -159,7 +159,17 @@ def run_batch_inference(config):
                 inputs = {'A': input_tensor, 'B': target_tensor, 'dates': None, 'masks': mask_tensor}
                 model.set_input(inputs)
                 model.forward()
-                reconstructed_tensor = model.fake_B
+                model.get_loss_G()
+                model.rescale()
+                out = model.fake_B
+
+                if hasattr(model.netG, 'variance') and model.netG.variance is not None:
+                    var = model.netG.variance
+                    model.netG.variance = None
+                else:
+                    var = out[:, :, 13:, ...]
+                out = out[:, :, :13, ...]
+                reconstructed_tensor = out
 
             # Post-process and save the output
             output_array = reconstructed_tensor.cpu().squeeze().numpy()
