@@ -60,7 +60,7 @@ def save_reconstructed_tif(path, array, source_tif_meta):
     # Update metadata for the 13-band S2 output
     metadata.update({
         'dtype': 'float32',
-        'count': 13
+        'count': array.shape[0]
     })
     with rasterio.open(path, 'w', **metadata) as dst:
         dst.write(array)
@@ -155,11 +155,13 @@ def run_batch_inference(config):
                 inputs = {'A': input_tensor, 'B': None, 'dates': None, 'masks': mask_tensor}
                 model.set_input(inputs)
                 model.forward()
+                model.rescale()
                 reconstructed_tensor = model.fake_B
 
             # Post-process and save the output
+            reconstructed_tensor = reconstructed_tensor[:, :, :13, :, :]
             output_array = reconstructed_tensor.cpu().squeeze().numpy()
-            output_array = np.clip(output_array, 0, 1) 
+            output_array = np.clip(output_array, 0, 1)
             
             # Create a descriptive output filename
             base_name = os.path.basename(s1_path).replace('s1', 's2_reconstructed')
