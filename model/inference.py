@@ -47,7 +47,7 @@ def get_cloud_map(img, cloud_detector):
     # The s2cloudless library expects image values in the original 0-10000 range
     # and the channel dimension to be last.
     img_for_detector = np.clip(img, 0, 10000)
-    img_for_detector = np.moveaxis(img_for_detector/10000, 0, -1)
+    img_for_detector = np.moveaxis(img_for_detector, 0, -1)
     
     # Add a batch dimension
     cloud_mask = cloud_detector.get_cloud_masks(img_for_detector[None, ...])[0, ...]
