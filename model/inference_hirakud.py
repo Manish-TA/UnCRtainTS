@@ -98,6 +98,7 @@ class InferenceDataset(Dataset):
         self.file_pairs = file_pairs
         self.config = config
         self.cloud_detector = cloud_detector
+        self.target_size = 256 
 
     def __len__(self):
         return len(self.file_pairs)
@@ -107,6 +108,16 @@ class InferenceDataset(Dataset):
 
         s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
         _, s1_img_raw = read_tif(s1_path)
+        
+        _, height, width = s2_cloudy_img_raw.shape
+        
+        if height > self.target_size or width > self.target_size:
+
+            top = np.random.randint(0, height - self.target_size + 1)
+            left = np.random.randint(0, width - self.target_size + 1)
+            
+            s2_cloudy_img_raw = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
+            s1_img_raw = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
 
         mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
         s1_processed = process_SAR(s1_img_raw)
@@ -123,8 +134,6 @@ class InferenceDataset(Dataset):
             'metadata': s2_cloudy_tif_obj.meta,
             's2_path': s2_cloudy_path
         }
-
-
 
 conf_path = os.path.join(dirname, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if not os.path.exists(conf_path):
