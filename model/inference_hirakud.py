@@ -128,12 +128,7 @@ class InferenceDataset(Dataset):
         else:
             input_data = s2_cloudy_processed
         
-        return {
-            'input_tensor': torch.from_numpy(input_data),
-            'mask_tensor': torch.from_numpy(mask_array),
-            'metadata': s2_cloudy_tif_obj.meta,
-            's2_path': s2_cloudy_path
-        }
+        return torch.from_numpy(input_data), torch.from_numpy(mask_array)
 
 conf_path = os.path.join(dirname, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if not os.path.exists(conf_path):
@@ -186,15 +181,10 @@ def run_batch_inference(config):
         dataset = InferenceDataset(pairs_in_cluster, config, cloud_detector)
         data_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
 
-        # --- Inner loop for batches ---
-        for batch in tqdm(data_loader, desc=f"Reconstructing {cluster_name}"):
-            input_tensor = batch['input_tensor'].to(device)
-            mask_tensor = batch['mask_tensor'].to(device)
+        for i, (input_batch, mask_batch) in enumerate(tqdm(data_loader, desc=f"Reconstructing {cluster_name}")):
+            input_tensor = input_batch.unsqueeze(1).to(device)
+            mask_tensor = mask_batch.unsqueeze(1).to(device)
             
-            # Add the time dimension the model expects
-            input_tensor = input_tensor.unsqueeze(1)
-            mask_tensor = mask_tensor.unsqueeze(1)
-
             with torch.no_grad():
                 inputs = {'A': input_tensor, 'B': None, 'dates': None, 'masks': mask_tensor}
                 model.set_input(inputs)
@@ -202,34 +192,29 @@ def run_batch_inference(config):
                 model.rescale()
                 reconstructed_batch = model.fake_B
 
-            # Separate image from variance if necessary
             if reconstructed_batch.shape[2] > 13:
                 image_batch = reconstructed_batch[:, :, :13, :, :]
             else:
                 image_batch = reconstructed_batch
             
-            # Move to CPU for saving
             output_batch = image_batch.cpu().squeeze(1).numpy()
             
-            for i in range(output_batch.shape[0]):
-                output_array = np.clip(output_batch[i], 0, 1) * 10000.0
+            current_batch_size = output_batch.shape[0]
+            for j in range(current_batch_size):
+                output_array = np.clip(output_batch[j], 0, 1) * 10000.0
                 
-                item_meta = {}
-                for key, value in batch['metadata'].items():
-                    item_meta[key] = value[i]
+                original_index = i * config.batch_size + j
+                s1_path, s2_path = pairs_in_cluster[original_index]
+                
+                with rasterio.open(s2_path) as src:
+                    item_meta = src.meta.copy()
 
-                for key, val in item_meta.items():
-                    if torch.is_tensor(val):
-                        item_meta[key] = val.item()
-                
-                s2_path = batch['s2_path'][i]
-                cluster_output_dir = os.path.join(config.output_dir, cluster_name)
+                cluster_output_dir = os.path.join(config.res_dir, cluster_name)
                 os.makedirs(cluster_output_dir, exist_ok=True)
                 output_filename = os.path.basename(s2_path)
                 output_path = os.path.join(cluster_output_dir, output_filename)
                 
                 save_reconstructed_tif(output_path, output_array, item_meta)
-
 
     print(f"\n--- Batch inference complete. Results saved to: {config.res_dir} ---")
 
