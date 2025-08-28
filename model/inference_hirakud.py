@@ -278,6 +278,8 @@ def post_process_and_clip_fields(config):
     
     for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
         reconstructed_tile_dir = os.path.join(config.res_dir, "cluster_tile_"+str(cluster_name))
+        if cluster_name!=0:
+            continue
         if not os.path.isdir(reconstructed_tile_dir):
             print(f"Warning: No reconstructed tiles found for cluster {cluster_name}. Skipping.")
             continue
