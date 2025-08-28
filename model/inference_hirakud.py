@@ -312,7 +312,7 @@ def post_process_and_clip_fields(config):
 
                             geojson_crs = "EPSG:4326"
                             transformer = Transformer.from_crs(geojson_crs, src.crs, always_xy=True)
-                            field_polygon_latlon = shape(json.loads(field_data['geo_json']))
+                            field_polygon_latlon = shape(field_data['geo_json'])
                             projected_polygon = shapely_transform(transformer.transform, field_polygon_latlon)
                             
                             mask_array_2d = rasterize(
