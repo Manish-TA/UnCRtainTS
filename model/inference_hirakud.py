@@ -256,6 +256,10 @@ def run_batch_inference(config):
 
     for cluster_name, pairs_in_cluster in all_pairs_by_cluster.items():
         print(f"\n--- Processing cluster: {cluster_name} ---")
+        # to be removed
+        if cluster_name == "tile_1":
+            continue
+        
         if not pairs_in_cluster:
             print("No pairs to process in this cluster.")
             continue
