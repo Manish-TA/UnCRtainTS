@@ -269,6 +269,8 @@ def post_process_and_clip_fields(config):
     """
 
     all_fields_by_cluster = create_cluster_field_mapping(config.root3, config.field_data_file)
+    print("\n--- Starting field clipping process ---")
+    print([(cluster, len(fields)) for cluster, fields in all_fields_by_cluster.items()])
     if not all_fields_by_cluster:
         print("Could not load field data. Aborting clipping.")
         return
@@ -283,7 +285,7 @@ def post_process_and_clip_fields(config):
         if not os.path.isdir(reconstructed_tile_dir):
             print(f"Warning: No reconstructed tiles found for cluster {cluster_name}. Skipping.")
             continue
-            
+        print(f"--- Processing cluster: {cluster_name} ---")
         reconstructed_tiles = glob.glob(os.path.join(reconstructed_tile_dir, '*.tif'))
         
         for field_data in fields_in_cluster:
@@ -291,6 +293,7 @@ def post_process_and_clip_fields(config):
             
             field_output_dir = os.path.join(fields_base_dir, "cluster_tile_"+str(cluster_name), str(field_id))
             os.makedirs(field_output_dir, exist_ok=True)
+            print(f"Created output directory for field {field_id} of cluster {cluster_name}")
             
             try:
                 start_date = datetime.strptime(field_data['image_start_date'], '%Y-%m-%d')
