@@ -253,7 +253,7 @@ def run_batch_inference(config):
                 with rasterio.open(s2_path) as src:
                     item_meta = src.meta.copy()
 
-                cluster_output_dir = os.path.join(config.res_dir, cluster_name)
+                cluster_output_dir = os.path.join(config.res_dir, "clusters", cluster_name)
                 os.makedirs(cluster_output_dir, exist_ok=True)
                 output_filename = os.path.basename(s2_path)
                 output_path = os.path.join(cluster_output_dir, output_filename)
@@ -277,9 +277,16 @@ def post_process_and_clip_fields(config):
 
     fields_base_dir = os.path.join(config.res_dir, "fields")
     os.makedirs(fields_base_dir, exist_ok=True)
+
+    s1_base_path = os.path.join(config.root3, 'sentinel-1')
+    all_files = os.listdir(s1_base_path)
+    if all_files:
+        prefix = os.path.commonprefix(all_files)
+    else:
+        prefix = ""
     
     for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
-        reconstructed_tile_dir = os.path.join(config.res_dir, "cluster_tile_"+str(cluster_name))
+        reconstructed_tile_dir = os.path.join(config.res_dir, prefix+str(cluster_name))
         if cluster_name!=0:
             continue
         if not os.path.isdir(reconstructed_tile_dir):
@@ -291,10 +298,10 @@ def post_process_and_clip_fields(config):
         for field_data in fields_in_cluster:
             field_id = field_data.get('field_id')
             
-            field_output_dir = os.path.join(fields_base_dir, "cluster_tile_"+str(cluster_name), str(field_id))
+            field_output_dir = os.path.join(fields_base_dir, prefix+str(cluster_name), str(field_id))
             os.makedirs(field_output_dir, exist_ok=True)
             print(f"Created output directory for field {field_id} of cluster {cluster_name}")
-            
+
             try:
                 start_date = datetime.strptime(field_data['image_start_date'], '%Y-%m-%d')
                 end_date = datetime.strptime(field_data['image_end_date'], '%Y-%m-%d')
