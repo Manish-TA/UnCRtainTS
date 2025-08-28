@@ -280,13 +280,18 @@ def post_process_and_clip_fields(config):
 
     s1_base_path = os.path.join(config.root3, 'sentinel-1')
     all_files = os.listdir(s1_base_path)
-    if all_files:
+    if len(all_files)>1:
         prefix = os.path.commonprefix(all_files)
+    elif len(all_files)==1:
+        prefix = re.sub(r'\d', '', all_files[0])
     else:
         prefix = ""
+        
+    print(f"Using prefix '{prefix}' for cluster directories.")
     
     for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
         reconstructed_tile_dir = os.path.join(config.res_dir, prefix+str(cluster_name))
+        # should be removed later
         if cluster_name!=0:
             continue
         if not os.path.isdir(reconstructed_tile_dir):
