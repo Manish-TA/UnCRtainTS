@@ -110,7 +110,7 @@ def create_cluster_field_mapping(root_directory, field_data_file):
     for index, row in df.iterrows():
         cluster_id = row.get('cluster_label')
         
-        if cluster_id:
+        if pd.notna(cluster_id):
             try:
                 field_info = {
                     'field_id': row.get('field_id'),
