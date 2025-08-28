@@ -277,7 +277,7 @@ def post_process_and_clip_fields(config):
     os.makedirs(fields_base_dir, exist_ok=True)
     
     for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
-        reconstructed_tile_dir = os.path.join(config.res_dir, "tile_"+str(cluster_name))
+        reconstructed_tile_dir = os.path.join(config.res_dir, "cluster_tile_"+str(cluster_name))
         if not os.path.isdir(reconstructed_tile_dir):
             print(f"Warning: No reconstructed tiles found for cluster {cluster_name}. Skipping.")
             continue
@@ -287,7 +287,7 @@ def post_process_and_clip_fields(config):
         for field_data in fields_in_cluster:
             field_id = field_data.get('field_id')
             
-            field_output_dir = os.path.join(fields_base_dir, cluster_name, str(field_id))
+            field_output_dir = os.path.join(fields_base_dir, "cluster_tile_"+str(cluster_name), str(field_id))
             os.makedirs(field_output_dir, exist_ok=True)
             
             try:
@@ -323,7 +323,7 @@ def post_process_and_clip_fields(config):
                             
                             clipped_field_image = tile_image_data * mask_array_3d
 
-                            output_filename = f"{field_id}_{os.path.basename(tile_path)}"
+                            output_filename = f"{os.path.basename(tile_path)}"
                             output_path = os.path.join(field_output_dir, output_filename)
                             
                             save_geotiff(output_path, clipped_field_image, tile_metadata)
