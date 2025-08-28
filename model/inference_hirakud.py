@@ -206,7 +206,7 @@ class InferenceDataset(Dataset):
         mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
         s1_processed = process_SAR(s1_img_raw)
         s2_cloudy_processed = process_MS(s2_cloudy_img_raw)
-
+        print("Shapes:", s1_processed.shape, s2_cloudy_processed.shape, mask_array.shape)
         if self.config.use_sar:
             input_data = np.concatenate((s1_processed, s2_cloudy_processed), axis=0)
         else:
@@ -252,6 +252,7 @@ def run_batch_inference(config):
 
     cloud_detector = S2PixelCloudDetector(threshold=0.4, all_bands=True, average_over=4, dilation_size=2)
     all_pairs_by_cluster = find_input_pairs(config.root3)
+    print("----------", all_pairs_by_cluster.keys())
 
     for cluster_name, pairs_in_cluster in all_pairs_by_cluster.items():
         print(f"\n--- Processing cluster: {cluster_name} ---")
