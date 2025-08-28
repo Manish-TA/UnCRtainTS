@@ -3,6 +3,7 @@ import sys
 import json
 import argparse
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 import rasterio
@@ -10,6 +11,12 @@ import glob
 import re
 from tqdm import tqdm
 from datetime import datetime, timedelta
+import csv
+from collections import defaultdict 
+from rasterio.features import rasterize
+from shapely.geometry import shape
+from shapely.ops import transform as shapely_transform
+from pyproj import Transformer
 
 dirname = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(dirname))
@@ -61,12 +68,63 @@ def save_reconstructed_tif(path, array, source_tif_meta):
     })
     with rasterio.open(path, 'w', **metadata) as dst:
         dst.write(array)
+    
+def save_geotiff(path, array, metadata):
+    metadata.update({'dtype': array.dtype.name, 'count': array.shape[0]})
+    with rasterio.open(path, 'w', **metadata) as dst:
+        dst.write(array)
+
 
 def get_date_from_filename(filepath):
     filename = os.path.basename(filepath)
     match = re.search(r'_(\d{8}T\d{6})_', filename)
     if match: return datetime.strptime(match.group(1), '%Y%m%dT%H%M%S')
     return None
+
+def create_cluster_field_mapping(root_directory, field_data_file_name):
+    """
+    Reads a CSV or Excel file and groups fields by cluster ID, extracting 
+    field_id, geo_json, and the four specified date fields.
+    """
+    field_level_data = os.path.join(root_directory, field_data_file_name)
+    if not os.path.isfile(field_level_data):
+        print(f"Error: Data file not found at {field_level_data}")
+        return {}
+
+    try:
+        file_extension = os.path.splitext(field_data_file_name)[1]
+        if file_extension == '.csv':
+            df = pd.read_csv(field_level_data)
+        elif file_extension in ['.xlsx', '.xls']:
+            df = pd.read_excel(field_level_data)
+        else:
+            print(f"Error: Unsupported file type '{file_extension}'. Please use .csv or .xlsx.")
+            return {}
+            
+    except Exception as e:
+        print(f"An error occurred while reading the file: {e}")
+        return {}
+
+    mapping = defaultdict(list)
+    
+    for index, row in df.iterrows():
+        cluster_id = row.get('cluster_label')
+        
+        if cluster_id:
+            try:
+                field_info = {
+                    'field_id': row.get('field_id'),
+                    'geo_json': json.loads(row.get('geo_json')),
+                    'image_start_date': row.get('image_start_date'),
+                    'image_end_date': row.get('image_end_date'),
+                    'tile_image_start_date': row.get('tile_image_start_date'),
+                    'tile_image_end_date': row.get('tile_image_end_date')
+                }
+                mapping[cluster_id].append(field_info)
+            except (json.JSONDecodeError, TypeError):
+                print(f"Warning: Could not parse geo_json for field_id {row.get('field_id')}. Skipping.")
+
+    return dict(mapping)
 
 def find_input_pairs(root_directory):
     s2_base_path = os.path.join(root_directory, 'sentinel-2', 'level-1c')
@@ -98,7 +156,6 @@ class InferenceDataset(Dataset):
         self.file_pairs = file_pairs
         self.config = config
         self.cloud_detector = cloud_detector
-        self.target_size = 256 
 
     def __len__(self):
         return len(self.file_pairs)
@@ -108,16 +165,6 @@ class InferenceDataset(Dataset):
 
         s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
         _, s1_img_raw = read_tif(s1_path)
-        
-        _, height, width = s2_cloudy_img_raw.shape
-        
-        if height > self.target_size or width > self.target_size:
-
-            top = np.random.randint(0, height - self.target_size + 1)
-            left = np.random.randint(0, width - self.target_size + 1)
-            
-            s2_cloudy_img_raw = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
-            s1_img_raw = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
 
         mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
         s1_processed = process_SAR(s1_img_raw)
@@ -166,18 +213,15 @@ def run_batch_inference(config):
     model.eval()
     print("--- Model loaded successfully ---")
 
-    # --- Initialize Cloud Detector and Find Files ---
     cloud_detector = S2PixelCloudDetector(threshold=0.4, all_bands=True, average_over=4, dilation_size=2)
     all_pairs_by_cluster = find_input_pairs(config.root3)
 
-    # --- Main Processing Loop (Outer loop for clusters) ---
     for cluster_name, pairs_in_cluster in all_pairs_by_cluster.items():
         print(f"\n--- Processing cluster: {cluster_name} ---")
         if not pairs_in_cluster:
             print("No pairs to process in this cluster.")
             continue
             
-        # --- Create Dataset and DataLoader for the current cluster ---
         dataset = InferenceDataset(pairs_in_cluster, config, cloud_detector)
         data_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
 
@@ -218,6 +262,78 @@ def run_batch_inference(config):
 
     print(f"\n--- Batch inference complete. Results saved to: {config.res_dir} ---")
 
+def post_process_and_clip_fields(config):
+    """
+    Finds reconstructed tiles, filters them by field-specific date ranges,
+    and clips the field geometry using the rasterize and multiply method.
+    """
+
+    all_fields_by_cluster = create_cluster_field_mapping(config.input_dir, config.field_data_file)
+    if not all_fields_by_cluster:
+        print("Could not load field data. Aborting clipping.")
+        return
+
+    fields_base_dir = os.path.join(config.output_dir, "fields")
+    os.makedirs(fields_base_dir, exist_ok=True)
+    
+    for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
+        reconstructed_tile_dir = os.path.join(config.output_dir, cluster_name)
+        if not os.path.isdir(reconstructed_tile_dir):
+            print(f"Warning: No reconstructed tiles found for cluster {cluster_name}. Skipping.")
+            continue
+            
+        reconstructed_tiles = glob.glob(os.path.join(reconstructed_tile_dir, '*.tif'))
+        
+        for field_data in fields_in_cluster:
+            field_id = field_data.get('field_id')
+            
+            field_output_dir = os.path.join(fields_base_dir, cluster_name, str(field_id))
+            os.makedirs(field_output_dir, exist_ok=True)
+            
+            try:
+                start_date = datetime.strptime(field_data['image_start_date'], '%Y-%m-%d')
+                end_date = datetime.strptime(field_data['image_end_date'], '%Y-%m-%d')
+            except (ValueError, TypeError):
+                print(f"Warning: Invalid date format for field {field_id}. Skipping.")
+                continue
+
+            for tile_path in reconstructed_tiles:
+                tile_date = get_date_from_filename(tile_path)
+                if tile_date and start_date <= tile_date <= end_date:
+                    try:
+                        with rasterio.open(tile_path) as src:
+                            tile_image_data = src.read()
+                            tile_metadata = src.meta.copy()
+
+                            geojson_crs = "EPSG:4326"
+                            transformer = Transformer.from_crs(geojson_crs, src.crs, always_xy=True)
+                            field_polygon_latlon = shape(json.loads(field_data['geo_json']))
+                            projected_polygon = shapely_transform(transformer.transform, field_polygon_latlon)
+                            
+                            mask_array_2d = rasterize(
+                                shapes=[projected_polygon],
+                                out_shape=(src.height, src.width),
+                                transform=src.transform,
+                                fill=0,
+                                all_touched=True,
+                                dtype=rasterio.uint8
+                            )
+                            
+                            mask_array_3d = mask_array_2d[np.newaxis, :, :]
+                            
+                            clipped_field_image = tile_image_data * mask_array_3d
+
+                            output_filename = f"{field_id}_{os.path.basename(tile_path)}"
+                            output_path = os.path.join(field_output_dir, output_filename)
+                            
+                            save_geotiff(output_path, clipped_field_image, tile_metadata)
+                            
+                    except Exception as e:
+                        print(f"Failed to clip field {field_id} from {os.path.basename(tile_path)}. Error: {e}")
+
+    print("\n--- Field clipping complete. ---")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Batch Inference Script')
     parser.add_argument('--weight_folder', type=str, required=True, help='Path to the trained model experiment directory')
@@ -225,5 +341,7 @@ if __name__ == "__main__":
     parser.add_argument('--res_dir', type=str, required=True, help='Path to the root folder where results will be saved.')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device for inference')
     parser.add_argument('--batch_size', type=int, default=32, help='Number of samples to process at once')
+    parser.add_argument('--field_data_file', type=str, required=True, help='Filename of the CSV or Excel file containing field data, located in input_dir.')
     
     run_batch_inference(config)
+    post_process_and_clip_fields(config)

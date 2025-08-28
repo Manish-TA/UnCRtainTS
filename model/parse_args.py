@@ -91,5 +91,6 @@ def create_parser(mode='train'):
     parser.add_argument("--weight_folder", type=str, default="./results", help="Path to the main folder containing the pre-trained weights")
     parser.add_argument("--use_custom", dest="use_custom", action="store_true", help="whether to test on individually specified patches or not")
     parser.add_argument("--load_config", default='', type=str, help="path of conf.json file to load")
+    parser.add_argument('--field_data_file', type=str, required=True, help='Filename of the CSV or Excel file containing field data, located in input_dir.')
 
     return parser
