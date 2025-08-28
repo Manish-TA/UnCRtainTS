@@ -151,11 +151,38 @@ def find_input_pairs(root_directory):
         all_results[cluster_name] = cluster_pairs
     return all_results
 
+# class InferenceDataset(Dataset):
+#     def __init__(self, file_pairs, config, cloud_detector):
+#         self.file_pairs = file_pairs
+#         self.config = config
+#         self.cloud_detector = cloud_detector
+
+#     def __len__(self):
+#         return len(self.file_pairs)
+
+#     def __getitem__(self, idx):
+#         s1_path, s2_cloudy_path = self.file_pairs[idx]
+
+#         s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
+#         _, s1_img_raw = read_tif(s1_path)
+
+#         mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
+#         s1_processed = process_SAR(s1_img_raw)
+#         s2_cloudy_processed = process_MS(s2_cloudy_img_raw)
+
+#         if self.config.use_sar:
+#             input_data = np.concatenate((s1_processed, s2_cloudy_processed), axis=0)
+#         else:
+#             input_data = s2_cloudy_processed
+        
+#         return torch.from_numpy(input_data), torch.from_numpy(mask_array)
+
 class InferenceDataset(Dataset):
     def __init__(self, file_pairs, config, cloud_detector):
         self.file_pairs = file_pairs
         self.config = config
         self.cloud_detector = cloud_detector
+        self.target_size = 256 
 
     def __len__(self):
         return len(self.file_pairs)
@@ -165,6 +192,16 @@ class InferenceDataset(Dataset):
 
         s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
         _, s1_img_raw = read_tif(s1_path)
+        
+        _, height, width = s2_cloudy_img_raw.shape
+        
+        if height > self.target_size or width > self.target_size:
+
+            top = np.random.randint(0, height - self.target_size + 1)
+            left = np.random.randint(0, width - self.target_size + 1)
+            
+            s2_cloudy_img_raw = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
+            s1_img_raw = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
 
         mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
         s1_processed = process_SAR(s1_img_raw)
