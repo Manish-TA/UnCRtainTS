@@ -114,7 +114,7 @@ def create_cluster_field_mapping(root_directory, field_data_file):
             try:
                 field_info = {
                     'field_id': row.get('field_id'),
-                    'geo_json': json.loads(row.get('geo_json')),
+                    'geo_json': eval(row.get('geo_json')),
                     'image_start_date': row.get('image_start_date'),
                     'image_end_date': row.get('image_end_date'),
                     'tile_image_start_date': row.get('tile_image_start_date'),
