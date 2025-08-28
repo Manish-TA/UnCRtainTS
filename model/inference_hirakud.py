@@ -81,22 +81,22 @@ def get_date_from_filename(filepath):
     if match: return datetime.strptime(match.group(1), '%Y%m%dT%H%M%S')
     return None
 
-def create_cluster_field_mapping(root_directory, field_data_file_name):
+def create_cluster_field_mapping(root_directory, field_data_file):
     """
     Reads a CSV or Excel file and groups fields by cluster ID, extracting 
     field_id, geo_json, and the four specified date fields.
     """
-    field_level_data = os.path.join(root_directory, field_data_file_name)
-    if not os.path.isfile(field_level_data):
-        print(f"Error: Data file not found at {field_level_data}")
+    # field_data_file = os.path.join(root_directory, field_data_file_name)
+    if not os.path.isfile(field_data_file):
+        print(f"Error: Data file not found at {field_data_file}")
         return {}
 
     try:
-        file_extension = os.path.splitext(field_data_file_name)[1]
+        file_extension = os.path.splitext(field_data_file)[1]
         if file_extension == '.csv':
-            df = pd.read_csv(field_level_data)
+            df = pd.read_csv(field_data_file)
         elif file_extension in ['.xlsx', '.xls']:
-            df = pd.read_excel(field_level_data)
+            df = pd.read_excel(field_data_file)
         else:
             print(f"Error: Unsupported file type '{file_extension}'. Please use .csv or .xlsx.")
             return {}
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument('--res_dir', type=str, required=True, help='Path to the root folder where results will be saved.')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device for inference')
     parser.add_argument('--batch_size', type=int, default=32, help='Number of samples to process at once')
-    parser.add_argument('--field_data_file', type=str, required=True, help='Filename of the CSV or Excel file containing field data, located in input_dir.')
+    parser.add_argument('--field_data_file', type=str, required=True, help='Filepath of the CSV or Excel file containing field data')
     
     run_batch_inference(config)
     post_process_and_clip_fields(config)
