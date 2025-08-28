@@ -268,16 +268,16 @@ def post_process_and_clip_fields(config):
     and clips the field geometry using the rasterize and multiply method.
     """
 
-    all_fields_by_cluster = create_cluster_field_mapping(config.input_dir, config.field_data_file)
+    all_fields_by_cluster = create_cluster_field_mapping(config.root3, config.field_data_file)
     if not all_fields_by_cluster:
         print("Could not load field data. Aborting clipping.")
         return
 
-    fields_base_dir = os.path.join(config.output_dir, "fields")
+    fields_base_dir = os.path.join(config.res_dir, "fields")
     os.makedirs(fields_base_dir, exist_ok=True)
     
     for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
-        reconstructed_tile_dir = os.path.join(config.output_dir, cluster_name)
+        reconstructed_tile_dir = os.path.join(config.res_dir, cluster_name)
         if not os.path.isdir(reconstructed_tile_dir):
             print(f"Warning: No reconstructed tiles found for cluster {cluster_name}. Skipping.")
             continue
