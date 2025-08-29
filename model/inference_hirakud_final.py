@@ -369,19 +369,30 @@ def post_process_and_clip_fields(config):
                             transformer = Transformer.from_crs(geojson_crs, src.crs, always_xy=True)
                             field_polygon_latlon = shape(field_data['geo_json'])
                             projected_polygon = shapely_transform(transformer.transform, field_polygon_latlon)
+
+                            clipped_field_image, out_transform = mask(src, [projected_polygon], crop=True)
                             
-                            mask_array_2d = rasterize(
-                                shapes=[projected_polygon],
-                                out_shape=(src.height, src.width),
-                                transform=src.transform,
-                                fill=0,
-                                all_touched=True,
-                                dtype=rasterio.uint8
-                            )
+                            tile_metadata = src.meta.copy()
+                            tile_metadata.update({
+                                "driver": "GTiff",
+                                "height": clipped_field_image.shape[1],
+                                "width": clipped_field_image.shape[2],
+                                "transform": out_transform
+                            })
                             
-                            mask_array_3d = mask_array_2d[np.newaxis, :, :]
+                            # mask_array_2d = rasterize(
+                            #     shapes=[projected_polygon],
+                            #     out_shape=(src.height, src.width),
+                            #     transform=src.transform,
+                            #     fill=0,
+                            #     all_touched=True,
+                            #     dtype=rasterio.uint8
+                            # )
                             
-                            clipped_field_image = tile_image_data * mask_array_3d
+                            # mask_array_3d = mask_array_2d[np.newaxis, :, :]
+                            
+                            # clipped_field_image = tile_image_data * mask_array_3d
+
 
                             output_filename = f"{os.path.basename(tile_path)}"
                             output_path = os.path.join(field_output_dir, output_filename)
@@ -393,8 +404,109 @@ def post_process_and_clip_fields(config):
 
     print("\n--- Field clipping complete. ---")
 
+def calculate_ndvi_stats(tiff_path):
+    """
+    Opens a GeoTIFF, calculates NDVI for Sentinel-2, and computes statistics.
+    Sentinel-2 bands: Red=B4, NIR=B8.
+    """
+    try:
+        with rasterio.open(tiff_path) as src:
+            # Read Red (Band 4) and NIR (Band 8)
+            red = src.read(4).astype(np.float32)
+            nir = src.read(8).astype(np.float32)
+
+            mask = red != 0
+            
+            np.seterr(divide='ignore', invalid='ignore')
+            ndvi = np.where(
+                (nir + red) > 0,
+                (nir - red) / (nir + red),
+                0  # Set NDVI to 0 where the denominator is zero
+            )
+            
+            valid_ndvi = ndvi[mask]
+            
+            if valid_ndvi.size == 0:
+                return None 
+
+            stats = {
+                'mean': np.mean(valid_ndvi),
+                'median': np.median(valid_ndvi),
+                '25th': np.percentile(valid_ndvi, 25),
+                '50th': np.percentile(valid_ndvi, 50),
+                '75th': np.percentile(valid_ndvi, 75),
+                '90th': np.percentile(valid_ndvi, 90)
+            }
+            return stats
+            
+    except Exception as e:
+        print(f"Warning: Could not process {tiff_path}. Error: {e}")
+        return None
+
+def generate_ndvi_report(config):
+    """
+    Generates a CSV report with NDVI statistics for all fields and timepoints.
+    This function should be called after post_process_and_clip_fields.
+    """
+    fields_base_dir = os.path.join(config.res_dir, 'fields')
+    output_csv_path = os.path.join(config.res_dir, 'ndvi_report.csv')
+
+    print(f"\n--- Starting NDVI report generation from: {fields_base_dir} ---")
+    
+    if not os.path.isdir(fields_base_dir):
+        print(f"Error: Fields directory not found at '{fields_base_dir}'. Aborting report generation.")
+        return
+
+    field_paths = glob.glob(os.path.join(fields_base_dir, '*', '*'))
+    
+    all_field_data = []
+
+    for field_path in tqdm(field_paths, desc="Generating NDVI Report"):
+        if not os.path.isdir(field_path):
+            continue
+            
+        # Extract cluster and field IDs from the path
+        parts = field_path.split(os.sep)
+        field_id = parts[-1]
+        cluster_id = parts[-2]
+        
+        # Find all TIFF files for this field and sort them chronologically
+        tiff_files = sorted(glob.glob(os.path.join(field_path, '*.tif')), key=get_date_from_filename)
+        
+        if not tiff_files:
+            continue
+
+        field_row = {'cluster_id': cluster_id, 'field_id': field_id}
+        
+        # Calculate stats for each timepoint
+        for i, tiff_path in enumerate(tiff_files):
+            timepoint = i + 1
+            stats = calculate_ndvi_stats(tiff_path)
+            
+            if stats:
+                field_row[f'ndvi_mean_{timepoint}st_timepoint'] = stats['mean']
+                field_row[f'ndvi_median_{timepoint}st_timepoint'] = stats['median']
+                field_row[f'ndvi_25th_{timepoint}st_timepoint'] = stats['25th']
+                field_row[f'ndvi_50th_{timepoint}st_timepoint'] = stats['50th']
+                field_row[f'ndvi_75th_{timepoint}st_timepoint'] = stats['75th']
+                field_row[f'ndvi_90th_{timepoint}st_timepoint'] = stats['90th']
+        
+        all_field_data.append(field_row)
+
+    if not all_field_data:
+        print("No field data was processed. The output CSV will be empty.")
+        return
+
+    # Create a DataFrame and save to CSV
+    df = pd.DataFrame(all_field_data)
+    df.to_csv(output_csv_path, index=False)
+    
+    print(f"\n--- NDVI report complete. Saved to: {output_csv_path} ---")
+    print(f"Processed {len(df)} fields.")
+
 
 if __name__ == "__main__":
+    # Your original argparse logic...
     parser = argparse.ArgumentParser(description='Batch Inference Script')
     parser.add_argument('--weight_folder', type=str, required=True, help='Path to the trained model experiment directory')
     parser.add_argument('--root3', type=str, required=True, help='Path to the root folder of new data.')
@@ -403,5 +515,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32, help='Number of samples to process at once')
     parser.add_argument('--field_data_file', type=str, required=True, help='Filepath of the CSV or Excel file containing field data')
     
+
     run_batch_inference(config)
     post_process_and_clip_fields(config)
+    generate_ndvi_report(config)
