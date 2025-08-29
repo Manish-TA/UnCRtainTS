@@ -443,10 +443,74 @@ def calculate_ndvi_stats(tiff_path):
         print(f"Warning: Could not process {tiff_path}. Error: {e}")
         return None
 
+# def generate_ndvi_report(config):
+#     """
+#     Generates a CSV report with NDVI statistics for all fields and timepoints.
+#     This function should be called after post_process_and_clip_fields.
+#     """
+#     fields_base_dir = os.path.join(config.res_dir, 'fields')
+#     output_csv_path = os.path.join(config.res_dir, 'ndvi_report.csv')
+
+#     print(f"\n--- Starting NDVI report generation from: {fields_base_dir} ---")
+    
+#     if not os.path.isdir(fields_base_dir):
+#         print(f"Error: Fields directory not found at '{fields_base_dir}'. Aborting report generation.")
+#         return
+
+#     field_paths = glob.glob(os.path.join(fields_base_dir, '*', '*'))
+    
+#     all_field_data = []
+
+#     for field_path in tqdm(field_paths, desc="Generating NDVI Report"):
+#         if not os.path.isdir(field_path):
+#             continue
+            
+#         # Extract cluster and field IDs from the path
+#         parts = field_path.split(os.sep)
+#         field_id = parts[-1]
+#         cluster_id = parts[-2]
+        
+#         # Find all TIFF files for this field and sort them chronologically
+#         tiff_files = sorted(glob.glob(os.path.join(field_path, '*.tif')), key=get_date_from_filename)
+        
+#         print(f"DEBUG: Found {len(tiff_files)} TIFF files for field {field_id} in cluster {cluster_id}")
+
+#         if not tiff_files:
+#             continue
+
+#         field_row = {'cluster_id': cluster_id, 'field_id': field_id}
+        
+#         # Calculate stats for each timepoint
+#         for i, tiff_path in enumerate(tiff_files):
+#             timepoint = i + 1
+#             stats = calculate_ndvi_stats(tiff_path)
+            
+#             if stats:
+#                 field_row[f'ndvi_mean_{timepoint}st_timepoint'] = stats['mean']
+#                 field_row[f'ndvi_median_{timepoint}st_timepoint'] = stats['median']
+#                 field_row[f'ndvi_25th_{timepoint}st_timepoint'] = stats['25th']
+#                 field_row[f'ndvi_50th_{timepoint}st_timepoint'] = stats['50th']
+#                 field_row[f'ndvi_75th_{timepoint}st_timepoint'] = stats['75th']
+#                 field_row[f'ndvi_90th_{timepoint}st_timepoint'] = stats['90th']
+        
+#         all_field_data.append(field_row)
+
+#     if not all_field_data:
+#         print("No field data was processed. The output CSV will be empty.")
+#         return
+
+#     # Create a DataFrame and save to CSV
+#     df = pd.DataFrame(all_field_data)
+#     df.to_csv(output_csv_path, index=False)
+    
+#     print(f"\n--- NDVI report complete. Saved to: {output_csv_path} ---")
+#     print(f"Processed {len(df)} fields.")
+
+
 def generate_ndvi_report(config):
     """
-    Generates a CSV report with NDVI statistics for all fields and timepoints.
-    This function should be called after post_process_and_clip_fields.
+    Generates a CSV report with NDVI statistics, completely skipping any 
+    fields that do not contain any .tif files.
     """
     fields_base_dir = os.path.join(config.res_dir, 'fields')
     output_csv_path = os.path.join(config.res_dir, 'ndvi_report.csv')
@@ -458,29 +522,24 @@ def generate_ndvi_report(config):
         return
 
     field_paths = glob.glob(os.path.join(fields_base_dir, '*', '*'))
-    
     all_field_data = []
 
     for field_path in tqdm(field_paths, desc="Generating NDVI Report"):
         if not os.path.isdir(field_path):
             continue
             
-        # Extract cluster and field IDs from the path
         parts = field_path.split(os.sep)
         field_id = parts[-1]
         cluster_id = parts[-2]
         
-        # Find all TIFF files for this field and sort them chronologically
         tiff_files = sorted(glob.glob(os.path.join(field_path, '*.tif')), key=get_date_from_filename)
         
-        print(f"DEBUG: Found {len(tiff_files)} TIFF files for field {field_id} in cluster {cluster_id}")
-        
+        # --- FIX: If no TIFF files are found, skip this field entirely ---
         if not tiff_files:
             continue
 
         field_row = {'cluster_id': cluster_id, 'field_id': field_id}
         
-        # Calculate stats for each timepoint
         for i, tiff_path in enumerate(tiff_files):
             timepoint = i + 1
             stats = calculate_ndvi_stats(tiff_path)
@@ -499,14 +558,13 @@ def generate_ndvi_report(config):
         print("No field data was processed. The output CSV will be empty.")
         return
 
-    # Create a DataFrame and save to CSV
     df = pd.DataFrame(all_field_data)
     df.to_csv(output_csv_path, index=False)
     
     print(f"\n--- NDVI report complete. Saved to: {output_csv_path} ---")
-    print(f"Processed {len(df)} fields.")
+    print(f"Processed and included {len(df)} fields with valid images.")
 
-
+    
 if __name__ == "__main__":
     # Your original argparse logic...
     parser = argparse.ArgumentParser(description='Batch Inference Script')
