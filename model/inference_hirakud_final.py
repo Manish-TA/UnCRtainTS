@@ -370,28 +370,28 @@ def post_process_and_clip_fields(config):
                             field_polygon_latlon = shape(field_data['geo_json'])
                             projected_polygon = shapely_transform(transformer.transform, field_polygon_latlon)
 
-                            clipped_field_image, out_transform = mask(src, [projected_polygon], crop=True)
+                            # clipped_field_image, out_transform = mask(src, [projected_polygon], crop=True)
                             
-                            tile_metadata = src.meta.copy()
-                            tile_metadata.update({
-                                "driver": "GTiff",
-                                "height": clipped_field_image.shape[1],
-                                "width": clipped_field_image.shape[2],
-                                "transform": out_transform
-                            })
+                            # tile_metadata = src.meta.copy()
+                            # tile_metadata.update({
+                            #     "driver": "GTiff",
+                            #     "height": clipped_field_image.shape[1],
+                            #     "width": clipped_field_image.shape[2],
+                            #     "transform": out_transform
+                            # })
                             
-                            # mask_array_2d = rasterize(
-                            #     shapes=[projected_polygon],
-                            #     out_shape=(src.height, src.width),
-                            #     transform=src.transform,
-                            #     fill=0,
-                            #     all_touched=True,
-                            #     dtype=rasterio.uint8
-                            # )
+                            mask_array_2d = rasterize(
+                                shapes=[projected_polygon],
+                                out_shape=(src.height, src.width),
+                                transform=src.transform,
+                                fill=0,
+                                all_touched=True,
+                                dtype=rasterio.uint8
+                            )
                             
-                            # mask_array_3d = mask_array_2d[np.newaxis, :, :]
+                            mask_array_3d = mask_array_2d[np.newaxis, :, :]
                             
-                            # clipped_field_image = tile_image_data * mask_array_3d
+                            clipped_field_image = tile_image_data * mask_array_3d
 
 
                             output_filename = f"{os.path.basename(tile_path)}"
