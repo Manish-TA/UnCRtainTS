@@ -473,6 +473,8 @@ def generate_ndvi_report(config):
         # Find all TIFF files for this field and sort them chronologically
         tiff_files = sorted(glob.glob(os.path.join(field_path, '*.tif')), key=get_date_from_filename)
         
+        print(f"DEBUG: Found {len(tiff_files)} TIFF files for field {field_id} in cluster {cluster_id}")
+        
         if not tiff_files:
             continue
 
