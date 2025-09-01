@@ -522,6 +522,7 @@ def generate_ndvi_report(config):
         return
 
     field_paths = glob.glob(os.path.join(fields_base_dir, '*', '*'))
+    print("fields found:", field_paths[:5])
     all_field_data = []
 
     for field_path in tqdm(field_paths, desc="Generating NDVI Report"):
@@ -533,16 +534,17 @@ def generate_ndvi_report(config):
         cluster_id = parts[-2]
         
         tiff_files = sorted(glob.glob(os.path.join(field_path, '*.tif')), key=get_date_from_filename)
+        print(f"DEBUG: Found {len(tiff_files)} TIFF files for field {field_id} in cluster {cluster_id}")
         
-        # --- FIX: If no TIFF files are found, skip this field entirely ---
         if not tiff_files:
             continue
 
         field_row = {'cluster_id': cluster_id, 'field_id': field_id}
-        
+
         for i, tiff_path in enumerate(tiff_files):
             timepoint = i + 1
             stats = calculate_ndvi_stats(tiff_path)
+            print(f"DEBUG: NDVI stats for {tiff_path}: {stats}")
             
             if stats:
                 field_row[f'ndvi_mean_{timepoint}st_timepoint'] = stats['mean']
@@ -551,7 +553,8 @@ def generate_ndvi_report(config):
                 field_row[f'ndvi_50th_{timepoint}st_timepoint'] = stats['50th']
                 field_row[f'ndvi_75th_{timepoint}st_timepoint'] = stats['75th']
                 field_row[f'ndvi_90th_{timepoint}st_timepoint'] = stats['90th']
-        
+            
+        print("field_row after including the stats:", field_row)
         all_field_data.append(field_row)
 
     if not all_field_data:
@@ -564,9 +567,8 @@ def generate_ndvi_report(config):
     print(f"\n--- NDVI report complete. Saved to: {output_csv_path} ---")
     print(f"Processed and included {len(df)} fields with valid images.")
 
-    
+
 if __name__ == "__main__":
-    # Your original argparse logic...
     parser = argparse.ArgumentParser(description='Batch Inference Script')
     parser.add_argument('--weight_folder', type=str, required=True, help='Path to the trained model experiment directory')
     parser.add_argument('--root3', type=str, required=True, help='Path to the root folder of new data.')
