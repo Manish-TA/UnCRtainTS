@@ -59,19 +59,14 @@ def get_cloud_map(img, cloud_detector):
     cloud_mask = cloud_detector.get_cloud_masks(img_for_detector[None, ...])[0, ...]
     return cloud_mask.astype(np.float32)
 
-def save_reconstructed_tif(path, array, source_tif_meta):
+def save_geotiff(path, array, source_tif_meta):
     """Saves a numpy array as a georeferenced TIFF file."""
     metadata = source_tif_meta.copy()
     # Update metadata for the 13-band S2 output
     metadata.update({
-        'dtype': 'float32',
+        'dtype': array.dtype.name,
         'count': array.shape[0]
     })
-    with rasterio.open(path, 'w', **metadata) as dst:
-        dst.write(array)
-    
-def save_geotiff(path, array, metadata):
-    metadata.update({'dtype': array.dtype.name, 'count': array.shape[0]})
     with rasterio.open(path, 'w', **metadata) as dst:
         dst.write(array)
 
@@ -258,8 +253,8 @@ def run_batch_inference(config):
     for cluster_name, pairs_in_cluster in all_pairs_by_cluster.items():
         print(f"\n--- Processing cluster: {cluster_name} ---")
         # to be removed
-        if cluster_name == "tile_1":
-            continue
+        # if cluster_name == "tile_1":
+        #     continue
 
         if not pairs_in_cluster:
             print("No pairs to process in this cluster.")
@@ -301,7 +296,7 @@ def run_batch_inference(config):
                 output_filename = os.path.basename(s2_path)
                 output_path = os.path.join(cluster_output_dir, output_filename)
                 
-                save_reconstructed_tif(output_path, output_array, item_meta)
+                save_geotiff(output_path, output_array, item_meta)
 
     print(f"\n--- Batch inference complete. Results saved to: {config.res_dir} ---")
 
@@ -335,8 +330,8 @@ def post_process_and_clip_fields(config):
     for cluster_name, fields_in_cluster in tqdm(all_fields_by_cluster.items(), desc="Processing Clusters"):
         reconstructed_tile_dir = os.path.join(config.res_dir, "clusters", prefix+str(cluster_name))
         # should be removed later
-        if cluster_name!=0:
-            continue
+        # if cluster_name!=0:
+        #     continue
         if not os.path.isdir(reconstructed_tile_dir):
             print(f"Warning: No reconstructed tiles found for cluster {cluster_name}. Skipping.")
             continue
