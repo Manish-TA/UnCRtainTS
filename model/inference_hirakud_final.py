@@ -175,42 +175,98 @@ def find_input_pairs(root_directory):
         
 #         return torch.from_numpy(input_data), torch.from_numpy(mask_array)
 
+# class InferenceDataset(Dataset):
+#     def __init__(self, file_pairs, config, cloud_detector):
+#         self.file_pairs = file_pairs
+#         self.config = config
+#         self.cloud_detector = cloud_detector
+#         self.target_size = 256 
+
+#     def __len__(self):
+#         return len(self.file_pairs)
+
+#     def __getitem__(self, idx):
+#         s1_path, s2_cloudy_path = self.file_pairs[idx]
+
+#         s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
+#         _, s1_img_raw = read_tif(s1_path)
+        
+#         _, height, width = s2_cloudy_img_raw.shape
+        
+#         if height > self.target_size or width > self.target_size:
+
+#             top = np.random.randint(0, height - self.target_size + 1)
+#             left = np.random.randint(0, width - self.target_size + 1)
+            
+#             s2_cloudy_img_raw = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
+#             s1_img_raw = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
+
+#         mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
+#         s1_processed = process_SAR(s1_img_raw)
+#         s2_cloudy_processed = process_MS(s2_cloudy_img_raw)
+#         print("Shapes:", s1_processed.shape, s2_cloudy_processed.shape, mask_array.shape)
+#         if self.config.use_sar:
+#             input_data = np.concatenate((s1_processed, s2_cloudy_processed), axis=0)
+#         else:
+#             input_data = s2_cloudy_processed
+        
+#         return torch.from_numpy(input_data), torch.from_numpy(mask_array)
+
+def collate_fn(batch):
+    """
+    Filters out None values from a batch.
+    """
+    batch = list(filter(lambda x: x is not None, batch))
+    return torch.utils.data.dataloader.default_collate(batch) if batch else (None, None)
+
 class InferenceDataset(Dataset):
     def __init__(self, file_pairs, config, cloud_detector):
         self.file_pairs = file_pairs
         self.config = config
         self.cloud_detector = cloud_detector
-        self.target_size = 256 
+        self.target_size = 256
 
     def __len__(self):
         return len(self.file_pairs)
 
     def __getitem__(self, idx):
-        s1_path, s2_cloudy_path = self.file_pairs[idx]
+        try:
+            s1_path, s2_cloudy_path = self.file_pairs[idx]
 
-        s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
-        _, s1_img_raw = read_tif(s1_path)
-        
-        _, height, width = s2_cloudy_img_raw.shape
-        
-        if height > self.target_size or width > self.target_size:
-
-            top = np.random.randint(0, height - self.target_size)
-            left = np.random.randint(0, width - self.target_size)
+            s2_cloudy_tif_obj, s2_cloudy_img_raw = read_tif(s2_cloudy_path)
+            _, s1_img_raw = read_tif(s1_path)
             
-            s2_cloudy_img_raw = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
-            s1_img_raw = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
 
-        mask_array = get_cloud_map(s2_cloudy_img_raw, self.cloud_detector)
-        s1_processed = process_SAR(s1_img_raw)
-        s2_cloudy_processed = process_MS(s2_cloudy_img_raw)
-        print("Shapes:", s1_processed.shape, s2_cloudy_processed.shape, mask_array.shape)
-        if self.config.use_sar:
-            input_data = np.concatenate((s1_processed, s2_cloudy_processed), axis=0)
-        else:
-            input_data = s2_cloudy_processed
+            _, s2_height, s2_width = s2_cloudy_img_raw.shape
+            _, s1_height, s1_width = s1_img_raw.shape
+
+            if s2_height < self.target_size or s2_width < self.target_size or \
+               s1_height < self.target_size or s1_width < self.target_size:
+                return None 
+
+            center_h, center_w = s2_height // 2, s2_width // 2
+            half_size = self.target_size // 2
+            
+            top = center_h - half_size
+            left = center_w - half_size
+            
+            s2_cropped = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
+            s1_cropped = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
+            
+
+            mask_array = get_cloud_map(s2_cropped, self.cloud_detector)
+            s1_processed = process_SAR(s1_cropped)
+            s2_cloudy_processed = process_MS(s2_cropped)
+
+            if self.config.use_sar:
+                input_data = np.concatenate((s1_processed, s2_cloudy_processed), axis=0)
+            else:
+                input_data = s2_cloudy_processed
+            
+            return torch.from_numpy(input_data), torch.from_numpy(mask_array)
         
-        return torch.from_numpy(input_data), torch.from_numpy(mask_array)
+        except Exception as e:
+            return None
 
 conf_path = os.path.join(dirname, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if not os.path.exists(conf_path):
@@ -263,9 +319,11 @@ def run_batch_inference(config):
             continue
             
         dataset = InferenceDataset(pairs_in_cluster, config, cloud_detector)
-        data_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False)
+        data_loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False, collate_fn=collate_fn)
 
         for i, (input_batch, mask_batch) in enumerate(tqdm(data_loader, desc=f"Reconstructing {cluster_name}")):
+            if input_batch is None:
+                continue
             input_tensor = input_batch.unsqueeze(1).to(device)
             mask_tensor = mask_batch.unsqueeze(1).to(device)
             
