@@ -195,8 +195,8 @@ class InferenceDataset(Dataset):
         
         if height > self.target_size or width > self.target_size:
 
-            top = np.random.randint(0, height - self.target_size + 1)
-            left = np.random.randint(0, width - self.target_size + 1)
+            top = np.random.randint(0, height - self.target_size)
+            left = np.random.randint(0, width - self.target_size)
             
             s2_cloudy_img_raw = s2_cloudy_img_raw[:, top:top + self.target_size, left:left + self.target_size]
             s1_img_raw = s1_img_raw[:, top:top + self.target_size, left:left + self.target_size]
