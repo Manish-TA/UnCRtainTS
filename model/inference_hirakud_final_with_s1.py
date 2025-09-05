@@ -404,6 +404,8 @@ def post_process_and_clip_fields(config, all_pairs_by_cluster):
             
             field_output_dir = os.path.join(fields_base_dir, prefix+str(cluster_name), str(field_id))
             os.makedirs(field_output_dir, exist_ok=True)
+            os.makedirs(os.path.join(field_output_dir, "s2"), exist_ok=True)
+            os.makedirs(os.path.join(field_output_dir, "s1"), exist_ok=True)
             print(f"Created output directory for field {field_id} of cluster {cluster_name}")
 
             try:
