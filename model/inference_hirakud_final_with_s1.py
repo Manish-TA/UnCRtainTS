@@ -71,10 +71,35 @@ def save_geotiff(path, array, source_tif_meta):
         dst.write(array)
 
 
+# def get_date_from_filename(filepath):
+#     filename = os.path.basename(filepath)
+#     match = re.search(r'_(\d{8}T\d{6})_', filename)
+#     if match: return datetime.strptime(match.group(1), '%Y%m%dT%H%M%S')
+#     return None
+
 def get_date_from_filename(filepath):
+    """
+    Extracts a date from a filename by trying multiple common date formats.
+    """
     filename = os.path.basename(filepath)
-    match = re.search(r'_(\d{8}T\d{6})_', filename)
-    if match: return datetime.strptime(match.group(1), '%Y%m%dT%H%M%S')
+    
+    date_formats = [
+        '%Y%m%dT%H%M%S',  # e.g., 20240110T050159 (Sentinel format)
+        '%Y%m%d',         # e.g., 20240110
+        '%Y-%m-%d',       # e.g., 2024-01-10
+        '%d-%m-%Y',       # e.g., 10-01-2024
+        '%m-%d-%Y'        # e.g., 01-10-2024
+    ]
+    
+    # Regex to find any potential date-like strings in the filename
+    potential_dates = re.findall(r'\d{8}T\d{6}|\d{8}|\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4}', filename)
+    
+    for date_str in potential_dates:
+        for fmt in date_formats:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
     return None
 
 def create_cluster_field_mapping(root_directory, field_data_file):
@@ -141,11 +166,11 @@ def find_input_pairs(root_directory):
         cluster_pairs = []
         for s2_path in s2_files:
             # to be removed
-            if "QQJ" in s2_path:
-                s2_date = get_date_from_filename(s2_path)
-                if not s2_date: continue
-                nearest_s1_path = min(s1_timed_files, key=lambda x: abs(s2_date - x[1]))[0]
-                cluster_pairs.append((nearest_s1_path, s2_path))
+            # if "QQJ" in s2_path:
+            s2_date = get_date_from_filename(s2_path)
+            if not s2_date: continue
+            nearest_s1_path = min(s1_timed_files, key=lambda x: abs(s2_date - x[1]))[0]
+            cluster_pairs.append((nearest_s1_path, s2_path))
         all_results[cluster_name] = cluster_pairs
     return all_results
 
