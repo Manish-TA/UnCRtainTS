@@ -806,7 +806,10 @@ def generate_timeseries_report(config):
             s2_stats = calculate_s2_stats(s2_tiff_path)
             if s2_stats:
                 for key, val in s2_stats.items():
-                    field_row[f'{key}_mean_{timepoint_str}'] = val
+                    if "max_sample" in key:
+                        field_row[f'{key}_{timepoint_str}'] = val
+                    else:
+                        field_row[f'{key}_mean_{timepoint_str}'] = val
             
             # Find and Process Corresponding S1 Image
             s2_filename = os.path.basename(s2_tiff_path)
@@ -826,7 +829,9 @@ def generate_timeseries_report(config):
         return
 
     df = pd.DataFrame(all_field_data)
-    cols = ['cluster_id', 'field_id'] + sorted([col for col in df.columns if col not in ['cluster_id', 'field_id']])
+    # cols = ['cluster_id', 'field_id'] + sorted([col for col in df.columns if col not in ['cluster_id', 'field_id']])
+    # df = df[cols]
+    cols = list(all_field_data[0].keys())
     df = df[cols]
     
     df.to_csv(output_csv_path, index=False)
