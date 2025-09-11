@@ -222,7 +222,7 @@ def run_batch_inference(config, all_pairs_by_cluster):
     print(model)
     # load_checkpoint(config, config.model_dir, model, "model")
     ckpt_n = f'_epoch_{config.resume_at}' if config.resume_at > 0 else ''
-    load_checkpoint(config, os.path.join(dirname, config.weight_folder), model, f"model{ckpt_n}")
+    load_checkpoint(config, config.weight_folder, model, f"model{ckpt_n}")
 
     model.eval()
     print("--- Model loaded successfully ---")

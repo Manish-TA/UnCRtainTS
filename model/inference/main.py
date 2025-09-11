@@ -17,7 +17,7 @@ test_config = parser.parse_args()
 test_config.pid = os.getpid()
 
 
-conf_path = os.path.join(dirname, test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
+conf_path = os.path.join(test_config.weight_folder, test_config.experiment_name, "conf.json") if not test_config.load_config else test_config.load_config
 if not os.path.exists(conf_path):
     raise FileNotFoundError(f"Configuration file not found at {conf_path}")
 
