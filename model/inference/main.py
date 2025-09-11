@@ -1,5 +1,9 @@
 import os
 import sys
+
+dirname = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.dirname(dirname))
+
 import json
 import argparse
 import torch
@@ -7,9 +11,6 @@ from src import utils
 from parse_args import create_parser
 from post_process import post_process_and_clip_fields, generate_timeseries_report
 from cloud_removal import find_input_pairs, run_batch_inference
-
-dirname = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(dirname))
 
 parser = create_parser(mode='test')
 test_config = parser.parse_args()
