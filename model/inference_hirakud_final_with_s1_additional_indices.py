@@ -22,18 +22,20 @@ from skimage.feature import graycomatrix, graycoprops
 from skimage import io
 import numpy as np
 from scipy.spatial.distance import cdist
-from src.model_utils import get_model, load_checkpoint
-from src import utils
-from s2cloudless import S2PixelCloudDetector
-from parse_args import create_parser
+
 
 dirname = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(dirname))
 
-
+from parse_args import create_parser
 parser = create_parser(mode='test')
 test_config = parser.parse_args()
 test_config.pid = os.getpid()
+
+
+from src.model_utils import get_model, load_checkpoint
+from src import utils
+from s2cloudless import S2PixelCloudDetector
 
 
 def read_tif(path_IMG):
